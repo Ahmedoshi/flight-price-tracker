@@ -1,21 +1,14 @@
-from app.config.settings import settings, PROJECT_ROOT
+from app.bot.telegram_bot import FlightPriceBot
+from app.database.database import initialize_database
 
 
 def main():
-    print("=" * 45)
-    print(" Flight Price Tracker")
-    print(" Version 1.0")
-    print("=" * 45)
-    print()
+    # Create the database if it doesn't already exist
+    initialize_database()
 
-    print("✓ Configuration loaded")
-    print(f"✓ Project Root : {PROJECT_ROOT}")
-    print(f"✓ Database     : {settings.database_path}")
-    print(f"✓ Timezone     : {settings.timezone}")
-    print(f"✓ Check Every  : {settings.check_interval} hour(s)")
-    print()
-
-    print("Application started successfully.")
+    # Start the Telegram bot
+    bot = FlightPriceBot()
+    bot.run()
 
 
 if __name__ == "__main__":
