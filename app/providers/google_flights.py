@@ -28,8 +28,10 @@ class GoogleFlightsProvider(BaseProvider):
                     to_airport=flight.origin,
                 ),
             ],
+            trip="round-trip",
             seat="economy",
             passengers=Passengers(adults=1),
+            currency="SAR",
         )
 
         try:
@@ -40,7 +42,13 @@ class GoogleFlightsProvider(BaseProvider):
 
         output = []
 
+        print("\n========== RAW FAST-FLIGHTS ==========")
+
         for item in results:
+
+            print(
+                f"Price={item.price} | Airline={', '.join(item.airlines)}"
+            )
 
             output.append(
                 FlightResult(
@@ -52,7 +60,12 @@ class GoogleFlightsProvider(BaseProvider):
                     destination=flight.destination,
                     departure_date=flight.departure_date,
                     return_date=flight.return_date,
+                    booking_url="",
                 )
             )
+
+        print("=====================================\n")
+
+        output.sort(key=lambda x: x.price)
 
         return output

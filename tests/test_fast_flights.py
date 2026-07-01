@@ -1,9 +1,5 @@
-from fast_flights import (
-    FlightQuery,
-    Passengers,
-    create_query,
-    get_flights,
-)
+from fast_flights import *
+from pprint import pprint
 
 query = create_query(
     flights=[
@@ -18,17 +14,17 @@ query = create_query(
             to_airport="RUH",
         ),
     ],
+    trip="round-trip",
     seat="economy",
     passengers=Passengers(adults=1),
+    currency="SAR",
 )
 
 results = get_flights(query)
 
-print(type(results))
-print("Count:", len(results))
+print("Results:", len(results))
 
-flight = results[0]
-
-print(type(flight))
-print(dir(flight))
-print(vars(flight))
+for i, r in enumerate(results):
+    print("=" * 80)
+    print(i)
+    pprint(r.__dict__)

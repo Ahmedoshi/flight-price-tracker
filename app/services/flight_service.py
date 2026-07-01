@@ -6,7 +6,6 @@ from app.providers.provider_manager import ProviderManager
 class FlightService:
 
     def __init__(self):
-
         self.provider_manager = ProviderManager()
 
     async def check_flight(
