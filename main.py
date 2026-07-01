@@ -3,10 +3,9 @@ from app.database.database import initialize_database
 
 
 def main():
-    # Create the database if it doesn't already exist
+
     initialize_database()
 
-    # Start the Telegram bot
     bot = FlightPriceBot()
     bot.run()
 

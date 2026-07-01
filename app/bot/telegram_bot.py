@@ -4,7 +4,14 @@ from telegram.ext import (
 )
 
 from app.config.settings import settings
-from app.bot.handlers import start, status, check_now
+from app.bot.handlers import (
+    start,
+    status,
+    check_now,
+    add,
+    list,
+    delete,
+)
 
 
 class FlightPriceBot:
@@ -20,6 +27,9 @@ class FlightPriceBot:
         self.app.add_handler(CommandHandler("start", start))
         self.app.add_handler(CommandHandler("status", status))
         self.app.add_handler(CommandHandler("check_now", check_now))
+        self.app.add_handler(CommandHandler("add", add))
+        self.app.add_handler(CommandHandler("list", list))
+        self.app.add_handler(CommandHandler("delete", delete))
 
     def run(self):
 

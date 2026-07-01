@@ -1,4 +1,10 @@
-from playwright.async_api import async_playwright
+from fast_flights import (
+    FlightQuery,
+    Passengers,
+    create_query,
+    get_flights,
+    FlightsNotFound,
+)
 
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
@@ -9,27 +15,44 @@ class GoogleFlightsProvider(BaseProvider):
 
     async def search(self, flight: Flight) -> list[FlightResult]:
 
-        print("Launching Google Flights...")
+        query = create_query(
+            flights=[
+                FlightQuery(
+                    date=flight.departure_date,
+                    from_airport=flight.origin,
+                    to_airport=flight.destination,
+                ),
+                FlightQuery(
+                    date=flight.return_date,
+                    from_airport=flight.destination,
+                    to_airport=flight.origin,
+                ),
+            ],
+            seat="economy",
+            passengers=Passengers(adults=1),
+        )
 
-        async with async_playwright() as p:
+        try:
+            results = get_flights(query)
 
-            browser = await p.chromium.launch(
-                headless=False
+        except FlightsNotFound:
+            return []
+
+        output = []
+
+        for item in results:
+
+            output.append(
+                FlightResult(
+                    provider="Google Flights",
+                    airline=", ".join(item.airlines),
+                    price=float(item.price),
+                    currency="SAR",
+                    origin=flight.origin,
+                    destination=flight.destination,
+                    departure_date=flight.departure_date,
+                    return_date=flight.return_date,
+                )
             )
 
-            page = await browser.new_page()
-
-            await page.goto(
-                "https://www.google.com/travel/flights",
-                wait_until="networkidle"
-            )
-
-            print("Google Flights opened successfully.")
-
-            await page.screenshot(path="google_flights_home.png")
-
-            print("Screenshot saved.")
-
-            await browser.close()
-
-        return []
+        return output

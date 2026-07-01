@@ -7,4 +7,4 @@ class Flight:
     destination: str
     departure_date: str
     return_date: str
-    max_price: float
+    max_price: float = 999999.0

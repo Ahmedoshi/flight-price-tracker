@@ -11,4 +11,4 @@ class FlightResult:
     destination: str
     departure_date: str
     return_date: str
-    booking_url: str
+    booking_url: str = ""
