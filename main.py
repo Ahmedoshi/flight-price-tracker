@@ -18,6 +18,11 @@ from app.database.database import initialize_database
 from app.scheduler.scheduler import start_scheduler
 
 
+async def post_init(application: Application):
+
+    start_scheduler(application)
+
+
 def main():
 
     initialize_database()
@@ -30,6 +35,7 @@ def main():
     application = (
         Application.builder()
         .token(settings.bot_token)
+        .post_init(post_init)
         .build()
     )
 
@@ -39,8 +45,6 @@ def main():
     application.add_handler(CommandHandler("add", add))
     application.add_handler(CommandHandler("list", list))
     application.add_handler(CommandHandler("delete", delete))
-
-    start_scheduler(application)
 
     application.run_polling(drop_pending_updates=True)
 

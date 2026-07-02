@@ -45,9 +45,12 @@ async def hourly_check(application):
 
 def start_scheduler(application):
 
+    if scheduler.running:
+        return
+
     scheduler.add_job(
         hourly_check,
-        "interval",
+        trigger="interval",
         hours=settings.check_interval,
         args=[application],
         id="hourly-flight-check",
