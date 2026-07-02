@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
+from app.scheduler.scheduler import hourly_check
 
 tracking = TrackingService()
 
@@ -15,7 +16,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/check_now\n"
         "/add\n"
         "/list\n"
-        "/delete"
+        "/delete\n"
+        "/run_scheduler"
     )
 
 
@@ -43,10 +45,7 @@ async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if result is None:
-
-        await update.message.reply_text(
-            "❌ No flights found."
-        )
+        await update.message.reply_text("❌ No flights found.")
         return
 
     await update.message.reply_text(
@@ -72,9 +71,7 @@ async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         max_price=1800,
     )
 
-    await update.message.reply_text(
-        "✅ Flight saved."
-    )
+    await update.message.reply_text("✅ Flight saved.")
 
 
 async def list(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -88,7 +85,6 @@ async def list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = ""
 
     for i, f in enumerate(flights, start=1):
-
         text += (
             f"{i}. "
             f"{f.origin} ➜ {f.destination} | "
@@ -103,6 +99,13 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     tracking.delete(1)
 
-    await update.message.reply_text(
-        "✅ First flight deleted."
-    )
+    await update.message.reply_text("✅ First flight deleted.")
+
+
+async def run_scheduler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text("⏳ Running scheduler...")
+
+    await hourly_check(context.application)
+
+    await update.message.reply_text("✅ Scheduler finished.")
