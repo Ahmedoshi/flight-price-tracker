@@ -1,12 +1,14 @@
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
 from app.providers.provider_manager import ProviderManager
+from app.services.tracking_service import TrackingService
 
 
 class FlightService:
 
     def __init__(self):
         self.provider_manager = ProviderManager()
+        self.tracking = TrackingService()
 
     async def check_flight(
         self,
@@ -47,4 +49,8 @@ class FlightService:
         if not results:
             return None
 
-        return results[0]
+        result = results[0]
+
+        self.tracking.save_result(result)
+
+        return result

@@ -2,6 +2,8 @@ from app.database.database import (
     add_flight,
     get_all_flights,
     delete_flight,
+    save_price,
+    get_last_price,
 )
 
 from app.models.flight import Flight
@@ -35,3 +37,11 @@ class TrackingService:
     def delete(self, index: int):
 
         delete_flight(index)
+
+    def last_price(self, flight: Flight):
+
+        return get_last_price(flight)
+
+    def save_result(self, result):
+
+        save_price(result)
