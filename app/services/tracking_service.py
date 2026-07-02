@@ -4,6 +4,7 @@ from app.database.database import (
     delete_flight,
     save_price,
     get_last_price,
+    get_price_history,
 )
 
 from app.models.flight import Flight
@@ -45,3 +46,7 @@ class TrackingService:
     def save_result(self, result):
 
         save_price(result)
+
+    def history(self, limit: int = 20):
+
+        return get_price_history(limit)

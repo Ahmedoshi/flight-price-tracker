@@ -166,12 +166,13 @@ def get_last_price(flight):
 
     row = conn.execute(
         """
-        SELECT price
+        SELECT
+            price
         FROM price_history
         WHERE origin=?
-        AND destination=?
-        AND departure_date=?
-        AND return_date=?
+          AND destination=?
+          AND departure_date=?
+          AND return_date=?
         ORDER BY checked_at DESC
         LIMIT 1
         """,
@@ -189,6 +190,28 @@ def get_last_price(flight):
         return row[0]
 
     return None
+
+
+def get_price_history(limit: int = 20):
+
+    conn = get_connection()
+
+    rows = conn.execute(
+        """
+        SELECT
+            airline,
+            price,
+            checked_at
+        FROM price_history
+        ORDER BY checked_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+
+    conn.close()
+
+    return rows
 
 
 def delete_flight(index: int):

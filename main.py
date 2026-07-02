@@ -12,6 +12,7 @@ from app.bot.handlers import (
     add,
     list,
     delete,
+    history,
     run_scheduler,
 )
 
@@ -46,6 +47,7 @@ def main():
     application.add_handler(CommandHandler("add", add))
     application.add_handler(CommandHandler("list", list))
     application.add_handler(CommandHandler("delete", delete))
+    application.add_handler(CommandHandler("history", history))
     application.add_handler(CommandHandler("run_scheduler", run_scheduler))
 
     application.run_polling(drop_pending_updates=True)

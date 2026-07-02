@@ -17,6 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/add\n"
         "/list\n"
         "/delete\n"
+        "/history\n"
         "/run_scheduler"
     )
 
@@ -85,6 +86,7 @@ async def list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = ""
 
     for i, f in enumerate(flights, start=1):
+
         text += (
             f"{i}. "
             f"{f.origin} ➜ {f.destination} | "
@@ -100,6 +102,27 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tracking.delete(1)
 
     await update.message.reply_text("✅ First flight deleted.")
+
+
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    rows = tracking.history()
+
+    if not rows:
+        await update.message.reply_text("No price history.")
+        return
+
+    text = "📈 Price History\n\n"
+
+    for airline, price, checked_at in rows:
+
+        text += (
+            f"{checked_at}\n"
+            f"{airline}\n"
+            f"{price:.0f} SAR\n\n"
+        )
+
+    await update.message.reply_text(text)
 
 
 async def run_scheduler(update: Update, context: ContextTypes.DEFAULT_TYPE):
