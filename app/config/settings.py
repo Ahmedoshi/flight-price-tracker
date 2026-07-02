@@ -4,15 +4,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """
-    Application configuration loaded from the .env file.
-    """
 
     bot_token: str
-    chat_id: str = ""
-    check_interval: int = 2
+    chat_id: str
+
+    check_interval: int = 1
+
     database_path: str = "data/flights.db"
+
     timezone: str = "Asia/Riyadh"
+
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(

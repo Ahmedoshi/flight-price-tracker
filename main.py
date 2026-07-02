@@ -15,6 +15,7 @@ from app.bot.handlers import (
 )
 
 from app.database.database import initialize_database
+from app.scheduler.scheduler import start_scheduler
 
 
 def main():
@@ -38,6 +39,8 @@ def main():
     application.add_handler(CommandHandler("add", add))
     application.add_handler(CommandHandler("list", list))
     application.add_handler(CommandHandler("delete", delete))
+
+    start_scheduler(application)
 
     application.run_polling(drop_pending_updates=True)
 
