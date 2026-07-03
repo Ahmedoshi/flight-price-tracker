@@ -16,12 +16,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/check ORIGIN DESTINATION DEPARTURE RETURN\n"
         "/add ORIGIN DESTINATION DEPARTURE RETURN TARGET\n"
         "/list\n"
-        "/delete\n"
+        "/delete INDEX\n"
         "/history\n"
         "/run_scheduler\n\n"
         "Examples:\n"
         "/check RUH LIS 2026-09-01 2026-09-15\n"
-        "/add RUH LIS 2026-09-01 2026-09-15 1800"
+        "/add RUH LIS 2026-09-01 2026-09-15 1800\n"
+        "/delete 1"
     )
 
 
@@ -155,9 +156,28 @@ async def list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    tracking.delete(1)
+    if len(context.args) != 1:
 
-    await update.message.reply_text("✅ First flight deleted.")
+        await update.message.reply_text(
+            "Usage:\n"
+            "/delete INDEX\n\n"
+            "Example:\n"
+            "/delete 2"
+        )
+        return
+
+    try:
+        index = int(context.args[0])
+    except ValueError:
+
+        await update.message.reply_text("❌ Index must be a number.")
+        return
+
+    tracking.delete(index)
+
+    await update.message.reply_text(
+        f"✅ Flight #{index} deleted."
+    )
 
 
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
