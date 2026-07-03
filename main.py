@@ -1,6 +1,8 @@
+from telegram import BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
+    CallbackQueryHandler,
 )
 
 from app.config.settings import settings
@@ -15,6 +17,7 @@ from app.bot.handlers import (
     delete,
     history,
     run_scheduler,
+    button_click,
 )
 
 from app.database.database import initialize_database
@@ -22,6 +25,19 @@ from app.scheduler.scheduler import start_scheduler
 
 
 async def post_init(application: Application):
+
+    await application.bot.set_my_commands(
+        [
+            BotCommand("start", "Start Flight Tracker"),
+            BotCommand("status", "System status"),
+            BotCommand("check", "Check flight price"),
+            BotCommand("add", "Add new flight"),
+            BotCommand("list", "List saved flights"),
+            BotCommand("delete", "Delete saved flight"),
+            BotCommand("history", "Price history"),
+            BotCommand("run_scheduler", "Run scheduler now"),
+        ]
+    )
 
     start_scheduler(application)
 
@@ -51,6 +67,10 @@ def main():
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("history", history))
     application.add_handler(CommandHandler("run_scheduler", run_scheduler))
+
+    application.add_handler(
+        CallbackQueryHandler(button_click)
+    )
 
     application.run_polling(drop_pending_updates=True)
 
