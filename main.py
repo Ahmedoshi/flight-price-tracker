@@ -8,6 +8,7 @@ from app.config.settings import settings
 from app.bot.handlers import (
     start,
     status,
+    check,
     check_now,
     add,
     list,
@@ -43,6 +44,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("check", check))
     application.add_handler(CommandHandler("check_now", check_now))
     application.add_handler(CommandHandler("add", add))
     application.add_handler(CommandHandler("list", list))

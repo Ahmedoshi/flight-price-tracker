@@ -13,13 +13,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✈️ Flight Price Tracker\n\n"
         "Commands:\n"
-        "/check_now\n"
+        "/check ORIGIN DESTINATION DEPARTURE RETURN\n"
         "/add ORIGIN DESTINATION DEPARTURE RETURN TARGET\n"
         "/list\n"
         "/delete\n"
         "/history\n"
         "/run_scheduler\n\n"
-        "Example:\n"
+        "Examples:\n"
+        "/check RUH LIS 2026-09-01 2026-09-15\n"
         "/add RUH LIS 2026-09-01 2026-09-15 1800"
     )
 
@@ -34,17 +35,32 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if len(context.args) != 4:
+
+        await update.message.reply_text(
+            "Usage:\n"
+            "/check ORIGIN DESTINATION DEPARTURE RETURN\n\n"
+            "Example:\n"
+            "/check RUH LIS 2026-09-01 2026-09-15"
+        )
+        return
+
+    origin = context.args[0].upper()
+    destination = context.args[1].upper()
+    departure_date = context.args[2]
+    return_date = context.args[3]
 
     await update.message.reply_text("🔍 Checking Google Flights...")
 
     service = FlightService()
 
     result = await service.cheapest_flight(
-        origin="RUH",
-        destination="LIS",
-        departure_date="2026-09-01",
-        return_date="2026-09-15",
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
+        return_date=return_date,
     )
 
     if result is None:
@@ -62,6 +78,14 @@ Route: {result.origin} ➜ {result.destination}
 Departure: {result.departure_date}
 Return: {result.return_date}
 """
+    )
+
+
+async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    await update.message.reply_text(
+        "ℹ️ Use:\n"
+        "/check RUH LIS 2026-09-01 2026-09-15"
     )
 
 
