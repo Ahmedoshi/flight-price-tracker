@@ -3,8 +3,6 @@ from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
-    MessageHandler,
-    filters,
 )
 
 from app.config.settings import settings
@@ -27,21 +25,6 @@ from app.database.database import initialize_database
 from app.scheduler.scheduler import start_scheduler
 
 
-async def debug_message(update, context):
-
-    print("\n========== UPDATE ==========")
-
-    if update.message:
-
-        print("TEXT :", repr(update.message.text))
-        print("ARGS :", context.args)
-
-        if update.message.entities:
-            print("ENTITIES :", update.message.entities)
-
-    print("============================\n")
-
-
 async def post_init(application: Application):
 
     print("=" * 40)
@@ -52,13 +35,13 @@ async def post_init(application: Application):
     await application.bot.set_my_commands(
         [
             BotCommand("start", "Start Flight Tracker"),
-            BotCommand("status", "System status"),
-            BotCommand("check", "Check flight price"),
-            BotCommand("add", "Add new flight"),
-            BotCommand("list", "List saved flights"),
-            BotCommand("delete", "Delete saved flight"),
-            BotCommand("history", "Price history"),
-            BotCommand("run_scheduler", "Run scheduler now"),
+            BotCommand("status", "System Status"),
+            BotCommand("check", "Check Flight Price"),
+            BotCommand("add", "Add Flight"),
+            BotCommand("list", "My Flights"),
+            BotCommand("delete", "Delete Flight"),
+            BotCommand("history", "Price History"),
+            BotCommand("run_scheduler", "Run Scheduler"),
         ]
     )
 
@@ -79,14 +62,6 @@ def main():
         .token(settings.bot_token)
         .post_init(post_init)
         .build()
-    )
-
-    application.add_handler(
-        MessageHandler(
-            filters.ALL,
-            debug_message,
-        ),
-        group=-1,
     )
 
     application.add_handler(CommandHandler("start", start))
