@@ -1,4 +1,8 @@
-from app.bot.keyboards import main_menu
+from app.bot.keyboards import (
+    main_menu,
+    scheduler_menu,
+    flight_card,
+)
 from app.services.tracking_service import TrackingService
 
 tracking = TrackingService()
@@ -8,34 +12,49 @@ def home_screen():
 
     flights = tracking.list()
 
-    return (
-        (
-            "✈️ Flight Price Tracker\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            "🟢 Bot Online\n"
-            f"📍 Saved Flights : {len(flights)}\n"
-            "⏰ Scheduler : Running\n\n"
-            "Choose an option."
-        ),
-        main_menu(),
+    text = (
+        "✈️ Flight Price Tracker\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "👋 Welcome\n\n"
+        "🟢 Bot Online\n"
+        f"📍 Flights Tracked : {len(flights)}\n"
+        "⏰ Scheduler : Every 2 Hours\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Choose an action:"
     )
+
+    return text, main_menu()
 
 
 def status_screen():
 
     flights = tracking.list()
 
-    return (
-        (
-            "ℹ️ System Status\n\n"
-            "🟢 Bot : Online\n"
-            "🟢 Database : Ready\n"
-            "🟢 Google Flights : Ready\n"
-            "🟢 Scheduler : Running\n\n"
-            f"📍 Saved Flights : {len(flights)}"
-        ),
-        main_menu(),
+    text = (
+        "ℹ️ System Status\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🟢 Bot : Online\n"
+        "🟢 Database : Connected\n"
+        "🟢 Google Flights : Ready\n"
+        "🟢 Scheduler : Running\n\n"
+        f"📍 Saved Flights : {len(flights)}"
     )
+
+    return text, main_menu()
+
+
+def scheduler_screen():
+
+    text = (
+        "⚙️ Scheduler\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Status\n"
+        "🟢 Running\n\n"
+        "Current Interval\n"
+        "🕑 Every 2 Hours"
+    )
+
+    return text, scheduler_menu()
 
 
 def flights_screen():
@@ -44,26 +63,34 @@ def flights_screen():
 
     if not flights:
 
-        return (
-            "📋 No saved flights.",
-            main_menu(),
+        return [
+            (
+                "📋 My Flights\n\nNo saved flights.",
+                main_menu(),
+            )
+        ]
+
+    cards = []
+
+    for index, flight in enumerate(flights, start=1):
+
+        text = (
+            "✈️ Flight\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{flight.origin} ➜ {flight.destination}\n\n"
+            f"📅 Departure : {flight.departure_date}\n"
+            f"↩ Return : {flight.return_date}\n\n"
+            f"🎯 Target : {flight.max_price:.0f} SAR"
         )
 
-    text = "📋 Saved Flights\n\n"
-
-    for i, flight in enumerate(flights, start=1):
-
-        text += (
-            f"{i}. {flight.origin} ➜ {flight.destination}\n"
-            f"📅 {flight.departure_date}\n"
-            f"🔁 {flight.return_date}\n"
-            f"🎯 {flight.max_price:.0f} SAR\n\n"
+        cards.append(
+            (
+                text,
+                flight_card(index),
+            )
         )
 
-    return (
-        text,
-        main_menu(),
-    )
+    return cards
 
 
 def history_screen():
@@ -73,21 +100,19 @@ def history_screen():
     if not rows:
 
         return (
-            "📈 No price history.",
+            "📈 Price History\n\nNo price history.",
             main_menu(),
         )
 
     text = "📈 Price History\n\n"
 
-    for airline, price, checked_at in rows:
+    for airline, price, checked_at in rows[:10]:
 
         text += (
-            f"{checked_at}\n"
-            f"{airline}\n"
-            f"{price:.0f} SAR\n\n"
+            "━━━━━━━━━━━━━━\n"
+            f"{checked_at}\n\n"
+            f"✈ {airline}\n"
+            f"💰 {price:.0f} SAR\n\n"
         )
 
-    return (
-        text,
-        main_menu(),
-    )
+    return text, main_menu()
