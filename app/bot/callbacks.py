@@ -1,6 +1,11 @@
-from telegram import Update
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+)
 from telegram.ext import ContextTypes
 
+from app.bot.keyboards import main_menu
 from app.bot.screens import (
     home_screen,
     status_screen,
@@ -8,7 +13,16 @@ from app.bot.screens import (
     flights_screen,
     history_screen,
 )
-from app.scheduler.scheduler import hourly_check
+from app.scheduler.scheduler import (
+    hourly_check,
+    pause_scheduler,
+    resume_scheduler,
+    set_interval_hours,
+)
+from app.services.flight_service import FlightService
+from app.services.tracking_service import TrackingService
+
+tracking = TrackingService()
 
 
 async def button_click(
@@ -76,6 +90,49 @@ async def button_click(
         )
 
     # ==========================
+    # PAUSE / RESUME SCHEDULER
+    # ==========================
+
+    elif query.data == "scheduler_pause":
+
+        pause_scheduler()
+
+        text, keyboard = scheduler_screen()
+
+        await query.message.reply_text(
+            text="⏸ Scheduler paused.\n\n" + text,
+            reply_markup=keyboard,
+        )
+
+    elif query.data == "scheduler_resume":
+
+        resume_scheduler()
+
+        text, keyboard = scheduler_screen()
+
+        await query.message.reply_text(
+            text="▶ Scheduler resumed.\n\n" + text,
+            reply_markup=keyboard,
+        )
+
+    # ==========================
+    # SCHEDULER INTERVAL
+    # ==========================
+
+    elif query.data in ("scheduler_1", "scheduler_2", "scheduler_6"):
+
+        hours = int(query.data.split("_")[1])
+
+        set_interval_hours(hours)
+
+        text, keyboard = scheduler_screen()
+
+        await query.message.reply_text(
+            text=f"🕑 Interval set to every {hours} hour(s).\n\n" + text,
+            reply_markup=keyboard,
+        )
+
+    # ==========================
     # MY FLIGHTS
     # ==========================
 
@@ -115,38 +172,77 @@ async def button_click(
         )
 
     # ==========================
-    # CHECK FLIGHT
+    # CHECK FLIGHT (interactive search wizard)
     # ==========================
-
-    elif query.data == "menu_check":
-
-        await query.message.reply_text(
-            "🔍 Flight Search\n\n"
-            "🚧 Interactive search wizard\n"
-            "coming in the next sprint."
-        )
+    # menu_check / menu_add are handled by the ConversationHandlers in
+    # app.bot.conversations, which are registered ahead of this generic
+    # handler. They're listed in main.py's handler order, not here.
 
     # ==========================
-    # ADD FLIGHT
-    # ==========================
-
-    elif query.data == "menu_add":
-
-        await query.message.reply_text(
-            "➕ Add Flight\n\n"
-            "🚧 Interactive add-flight wizard\n"
-            "coming in the next sprint."
-        )
-
-    # ==========================
-    # CHECK NOW
+    # CHECK NOW (re-check price for a saved flight)
     # ==========================
 
     elif query.data.startswith("check_"):
 
-        await query.message.reply_text(
-            "🚧 Check Now will be available in the next sprint."
-        )
+        flight_id = int(query.data.split("_")[1])
+        flight = tracking.get_by_id(flight_id)
+
+        if flight is None:
+
+            await query.message.reply_text(
+                "❌ That flight no longer exists.",
+                reply_markup=main_menu(),
+            )
+
+        else:
+
+            await query.message.reply_text("🔍 Searching...")
+
+            service = FlightService()
+
+            try:
+                result = await service.cheapest_flight(
+                    origin=flight.origin,
+                    destination=flight.destination,
+                    departure_date=flight.departure_date,
+                    return_date=flight.return_date,
+                    date_flex_days=flight.date_flex_days,
+                )
+
+            except ValueError as exc:
+
+                await query.message.reply_text(
+                    f"❌ {exc}",
+                    reply_markup=main_menu(),
+                )
+                return
+
+            if result is None:
+
+                await query.message.reply_text(
+                    "❌ No flights found.",
+                    reply_markup=main_menu(),
+                )
+
+            else:
+
+                text = (
+                    "✈️ Cheapest Flight\n\n"
+                    f"🏢 Provider : {result.provider}\n\n"
+                    f"✈ Airline : {result.airline}\n\n"
+                    f"💰 Price : {result.price:.0f} {result.currency}\n\n"
+                    f"📍 Route : {result.origin} ➜ {result.destination}\n\n"
+                    f"📅 Departure : {result.departure_date}\n\n"
+                    f"🔁 Return : {result.return_date}"
+                )
+
+                if result.booking_url:
+                    text += f"\n\n🔗 {result.booking_url}"
+
+                await query.message.reply_text(
+                    text=text,
+                    reply_markup=main_menu(),
+                )
 
     # ==========================
     # EDIT
@@ -155,17 +251,63 @@ async def button_click(
     elif query.data.startswith("edit_"):
 
         await query.message.reply_text(
-            "🚧 Edit Flight will be available in the next sprint."
+            "✏️ Editing isn't available yet.\n\n"
+            "For now, delete this flight and add it again with the new details."
         )
 
     # ==========================
-    # DELETE
+    # DELETE (with confirmation)
     # ==========================
 
     elif query.data.startswith("delete_"):
 
+        flight_id = int(query.data.split("_")[1])
+        flight = tracking.get_by_id(flight_id)
+
+        if flight is None:
+
+            await query.message.reply_text(
+                "❌ That flight no longer exists.",
+                reply_markup=main_menu(),
+            )
+
+        else:
+
+            confirm_keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "✅ Yes, delete it",
+                            callback_data=f"confirm_delete_{flight_id}",
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel",
+                            callback_data="menu_list",
+                        ),
+                    ],
+                ]
+            )
+
+            await query.message.reply_text(
+                text=(
+                    "🗑 Delete this flight?\n\n"
+                    f"{flight.origin} ➜ {flight.destination}\n"
+                    f"📅 {flight.departure_date} / 🔁 {flight.return_date}"
+                ),
+                reply_markup=confirm_keyboard,
+            )
+
+    elif query.data.startswith("confirm_delete_"):
+
+        flight_id = int(query.data.split("_")[2])
+
+        tracking.delete(flight_id)
+
         await query.message.reply_text(
-            "🚧 Delete Flight will be available in the next sprint."
+            "✅ Flight deleted.",
+            reply_markup=main_menu(),
         )
 
     # ==========================

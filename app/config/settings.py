@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     database_path: str = "data/flights.db"
 
+    kiwi_api_key: str = ""
+
     timezone: str = "Asia/Riyadh"
 
     log_level: str = "INFO"

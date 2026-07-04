@@ -1,3 +1,5 @@
+import asyncio
+
 from fast_flights import (
     FlightQuery,
     Passengers,
@@ -9,6 +11,7 @@ from fast_flights import (
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
 from app.providers.base_provider import BaseProvider
+from app.providers.google_url import GoogleFlightsURLBuilder
 
 
 class GoogleFlightsProvider(BaseProvider):
@@ -35,12 +38,27 @@ class GoogleFlightsProvider(BaseProvider):
         )
 
         try:
-            results = get_flights(query)
+            # get_flights() is a blocking/synchronous call (it drives a
+            # headless browser under the hood). Calling it directly here
+            # would freeze the asyncio event loop for the whole duration
+            # of the scrape - including the Telegram bot's long-poll
+            # connection, which is what was causing the bot to lose its
+            # getUpdates connection and crash with "Conflict: terminated
+            # by other getUpdates request". Running it in a worker thread
+            # keeps the event loop free.
+            results = await asyncio.to_thread(get_flights, query)
 
         except FlightsNotFound:
             return []
 
         output = []
+
+        booking_url = GoogleFlightsURLBuilder.build(
+            origin=flight.origin,
+            destination=flight.destination,
+            departure=flight.departure_date,
+            return_date=flight.return_date,
+        )
 
         print("\n========== RAW FAST-FLIGHTS ==========")
 
@@ -60,7 +78,7 @@ class GoogleFlightsProvider(BaseProvider):
                     destination=flight.destination,
                     departure_date=flight.departure_date,
                     return_date=flight.return_date,
-                    booking_url="",
+                    booking_url=booking_url,
                 )
             )
 

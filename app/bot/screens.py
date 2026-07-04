@@ -3,14 +3,28 @@ from app.bot.keyboards import (
     scheduler_menu,
     flight_card,
 )
+from app.config.settings import settings
+from app.scheduler.scheduler import get_status
 from app.services.tracking_service import TrackingService
 
 tracking = TrackingService()
 
 
+def _kiwi_enabled() -> bool:
+
+    return bool(settings.kiwi_api_key)
+
+
 def home_screen():
 
     flights = tracking.list()
+    is_running, interval_hours = get_status()
+
+    schedule_text = (
+        f"Every {interval_hours} Hour{'s' if interval_hours != 1 else ''}"
+        if is_running
+        else "Paused"
+    )
 
     text = (
         "✈️ Flight Price Tracker\n\n"
@@ -18,7 +32,7 @@ def home_screen():
         "👋 Welcome\n\n"
         "🟢 Bot Online\n"
         f"📍 Flights Tracked : {len(flights)}\n"
-        "⏰ Scheduler : Every 2 Hours\n\n"
+        f"⏰ Scheduler : {schedule_text}\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "Choose an action:"
     )
@@ -29,6 +43,7 @@ def home_screen():
 def status_screen():
 
     flights = tracking.list()
+    is_running, interval_hours = get_status()
 
     text = (
         "ℹ️ System Status\n\n"
@@ -36,7 +51,8 @@ def status_screen():
         "🟢 Bot : Online\n"
         "🟢 Database : Connected\n"
         "🟢 Google Flights : Ready\n"
-        "🟢 Scheduler : Running\n\n"
+        f"{'🟢 Kiwi.com : Ready' if _kiwi_enabled() else '⚪ Kiwi.com : Not configured'}\n"
+        f"{'🟢' if is_running else '⏸'} Scheduler : {'Running' if is_running else 'Paused'}\n\n"
         f"📍 Saved Flights : {len(flights)}"
     )
 
@@ -45,13 +61,15 @@ def status_screen():
 
 def scheduler_screen():
 
+    is_running, interval_hours = get_status()
+
     text = (
         "⚙️ Scheduler\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "Status\n"
-        "🟢 Running\n\n"
+        f"{'🟢 Running' if is_running else '⏸ Paused'}\n\n"
         "Current Interval\n"
-        "🕑 Every 2 Hours"
+        f"🕑 Every {interval_hours} Hour{'s' if interval_hours != 1 else ''}"
     )
 
     return text, scheduler_menu()
@@ -72,21 +90,25 @@ def flights_screen():
 
     cards = []
 
-    for index, flight in enumerate(flights, start=1):
+    for position, flight in enumerate(flights, start=1):
+
+        flex_text = (
+            f" (+/-{flight.date_flex_days}d)" if flight.date_flex_days else ""
+        )
 
         text = (
-            "✈️ Flight\n\n"
+            f"✈️ Flight #{position}\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{flight.origin} ➜ {flight.destination}\n\n"
             f"📅 Departure : {flight.departure_date}\n"
-            f"↩ Return : {flight.return_date}\n\n"
+            f"↩ Return : {flight.return_date}{flex_text}\n\n"
             f"🎯 Target : {flight.max_price:.0f} SAR"
         )
 
         cards.append(
             (
                 text,
-                flight_card(index),
+                flight_card(flight.id),
             )
         )
 

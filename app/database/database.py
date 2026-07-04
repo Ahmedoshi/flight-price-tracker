@@ -55,8 +55,26 @@ def initialize_database():
         """
     )
 
+    _ensure_column(conn, "flights", "date_flex_days", "INTEGER NOT NULL DEFAULT 0")
+
     conn.commit()
     conn.close()
+
+
+def _ensure_column(conn, table: str, column: str, definition: str):
+    """Add a column to an existing table if it isn't there yet.
+
+    Lets older databases (created before a given feature existed) pick
+    up new columns without a separate migration step.
+    """
+
+    existing = {
+        row[1]
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def add_flight(flight: Flight):
@@ -71,11 +89,12 @@ def add_flight(flight: Flight):
             destination,
             departure_date,
             return_date,
-            max_price
+            max_price,
+            date_flex_days
         )
         VALUES
         (
-            ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?
         )
         """,
         (
@@ -84,6 +103,7 @@ def add_flight(flight: Flight):
             flight.departure_date,
             flight.return_date,
             flight.max_price,
+            flight.date_flex_days,
         ),
     )
 
@@ -98,12 +118,15 @@ def get_all_flights():
     rows = conn.execute(
         """
         SELECT
+            id,
             origin,
             destination,
             departure_date,
             return_date,
-            max_price
+            max_price,
+            date_flex_days
         FROM flights
+        ORDER BY id
         """
     ).fetchall()
 
@@ -115,11 +138,13 @@ def get_all_flights():
 
         flights.append(
             Flight(
-                origin=row[0],
-                destination=row[1],
-                departure_date=row[2],
-                return_date=row[3],
-                max_price=row[4],
+                id=row[0],
+                origin=row[1],
+                destination=row[2],
+                departure_date=row[3],
+                return_date=row[4],
+                max_price=row[5],
+                date_flex_days=row[6],
             )
         )
 
@@ -214,7 +239,7 @@ def get_price_history(limit: int = 20):
     return rows
 
 
-def delete_flight(index: int):
+def delete_flight(flight_id: int):
 
     conn = get_connection()
 
@@ -223,7 +248,7 @@ def delete_flight(index: int):
         DELETE FROM flights
         WHERE id = ?
         """,
-        (index,),
+        (flight_id,),
     )
 
     conn.commit()

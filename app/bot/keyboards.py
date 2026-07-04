@@ -125,28 +125,28 @@ def scheduler_menu():
     return InlineKeyboardMarkup(keyboard)
 
 
-def flight_card(index: int):
+def flight_card(flight_id: int):
 
     keyboard = [
 
         [
             InlineKeyboardButton(
                 "🔍 Check Now",
-                callback_data=f"check_{index}",
+                callback_data=f"check_{flight_id}",
             ),
         ],
 
         [
             InlineKeyboardButton(
                 "✏️ Edit",
-                callback_data=f"edit_{index}",
+                callback_data=f"edit_{flight_id}",
             ),
         ],
 
         [
             InlineKeyboardButton(
                 "🗑 Delete",
-                callback_data=f"delete_{index}",
+                callback_data=f"delete_{flight_id}",
             ),
         ],
 

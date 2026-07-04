@@ -11,3 +11,5 @@ class Flight:
     last_price: float = 0.0
     last_airline: str = ""
     notified: bool = False
+    id: int | None = None
+    date_flex_days: int = 0
