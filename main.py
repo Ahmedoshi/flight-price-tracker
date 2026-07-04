@@ -25,6 +25,7 @@ from app.bot.callbacks import button_click
 from app.bot.conversations import (
     add_flight_conversation,
     check_flight_conversation,
+    edit_flight_conversation,
 )
 
 from app.database.database import initialize_database
@@ -110,10 +111,11 @@ def main():
     application.add_handler(CommandHandler("run_scheduler", run_scheduler))
 
     # Conversation wizards must be registered before the catch-all
-    # button_click handler so their menu_add / menu_check callbacks are
-    # matched first.
+    # button_click handler so their menu_add / menu_check / edit_<id>
+    # callbacks are matched first.
     application.add_handler(add_flight_conversation)
     application.add_handler(check_flight_conversation)
+    application.add_handler(edit_flight_conversation)
 
     application.add_handler(
         CallbackQueryHandler(button_click)

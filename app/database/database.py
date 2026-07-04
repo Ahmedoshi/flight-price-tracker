@@ -239,6 +239,37 @@ def get_price_history(limit: int = 20):
     return rows
 
 
+def update_flight(flight: Flight):
+
+    conn = get_connection()
+
+    conn.execute(
+        """
+        UPDATE flights
+        SET
+            origin = ?,
+            destination = ?,
+            departure_date = ?,
+            return_date = ?,
+            max_price = ?,
+            date_flex_days = ?
+        WHERE id = ?
+        """,
+        (
+            flight.origin,
+            flight.destination,
+            flight.departure_date,
+            flight.return_date,
+            flight.max_price,
+            flight.date_flex_days,
+            flight.id,
+        ),
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def delete_flight(flight_id: int):
 
     conn = get_connection()

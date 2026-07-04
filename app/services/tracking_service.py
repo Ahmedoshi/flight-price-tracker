@@ -5,6 +5,7 @@ from app.database.database import (
     save_price,
     get_last_price,
     get_price_history,
+    update_flight,
 )
 
 from app.models.flight import Flight
@@ -43,6 +44,29 @@ class TrackingService:
     def delete(self, flight_id: int):
 
         delete_flight(flight_id)
+
+    def update(
+        self,
+        flight_id: int,
+        origin: str,
+        destination: str,
+        departure_date: str,
+        return_date: str,
+        max_price: float,
+        date_flex_days: int = 0,
+    ):
+
+        flight = Flight(
+            id=flight_id,
+            origin=",".join(parse_codes(origin)),
+            destination=",".join(parse_codes(destination)),
+            departure_date=departure_date,
+            return_date=return_date,
+            max_price=max_price,
+            date_flex_days=date_flex_days,
+        )
+
+        update_flight(flight)
 
     def get_by_position(self, position: int) -> Flight | None:
         """Resolve a 1-based position (as shown in /list) to a Flight.

@@ -245,15 +245,9 @@ async def button_click(
                 )
 
     # ==========================
-    # EDIT
+    # EDIT (handled by edit_flight_conversation in app.bot.conversations,
+    # registered ahead of this generic handler)
     # ==========================
-
-    elif query.data.startswith("edit_"):
-
-        await query.message.reply_text(
-            "✏️ Editing isn't available yet.\n\n"
-            "For now, delete this flight and add it again with the new details."
-        )
 
     # ==========================
     # DELETE (with confirmation)
