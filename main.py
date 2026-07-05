@@ -18,6 +18,7 @@ from app.bot.handlers import (
     list,
     delete,
     history,
+    stats,
     run_scheduler,
 )
 
@@ -77,6 +78,7 @@ async def post_init(application: Application):
             BotCommand("list", "My Flights"),
             BotCommand("delete", "Delete Flight"),
             BotCommand("history", "Price History"),
+            BotCommand("stats", "Price Analytics"),
             BotCommand("run_scheduler", "Run Scheduler"),
         ]
     )
@@ -108,6 +110,7 @@ def main():
     application.add_handler(CommandHandler("list", list))
     application.add_handler(CommandHandler("delete", delete))
     application.add_handler(CommandHandler("history", history))
+    application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("run_scheduler", run_scheduler))
 
     # Conversation wizards must be registered before the catch-all

@@ -3,8 +3,27 @@ import asyncio
 from app.config.settings import settings
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
+from app.providers.amadeus_flights import AmadeusFlightsProvider
+from app.providers.duffel_flights import DuffelFlightsProvider
 from app.providers.google_flights import GoogleFlightsProvider
 from app.providers.kiwi_flights import KiwiFlightsProvider
+from app.providers.skyscanner_flights import SkyscannerFlightsProvider
+
+# Registry of every provider the bot knows how to use, each gated on
+# whether its required setting(s) are actually configured. Adding a
+# new provider is: write a BaseProvider subclass, add its settings
+# field(s) in app/config/settings.py, and add one line here - nothing
+# else in the app needs to change.
+PROVIDER_REGISTRY = [
+    (lambda: True, GoogleFlightsProvider),  # always on, no key needed
+    (lambda: bool(settings.kiwi_api_key), KiwiFlightsProvider),
+    (
+        lambda: bool(settings.amadeus_client_id and settings.amadeus_client_secret),
+        AmadeusFlightsProvider,
+    ),
+    (lambda: bool(settings.duffel_api_key), DuffelFlightsProvider),
+    (lambda: bool(settings.skyscanner_api_key), SkyscannerFlightsProvider),
+]
 
 
 class ProviderManager:
@@ -12,14 +31,10 @@ class ProviderManager:
     def __init__(self):
 
         self.providers = [
-            GoogleFlightsProvider(),
+            provider_class()
+            for is_enabled, provider_class in PROVIDER_REGISTRY
+            if is_enabled()
         ]
-
-        # Kiwi.com requires a free Tequila API key (KIWI_API_KEY in
-        # .env). Without one, it's skipped entirely and the bot keeps
-        # working on Google Flights alone.
-        if settings.kiwi_api_key:
-            self.providers.append(KiwiFlightsProvider())
 
     async def search(self, flight: Flight) -> list[FlightResult]:
 

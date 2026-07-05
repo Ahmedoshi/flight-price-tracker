@@ -5,7 +5,9 @@ from app.database.database import (
     save_price,
     get_last_price,
     get_price_history,
+    get_route_price_history,
     update_flight,
+    update_flight_tracking,
 )
 
 from app.models.flight import Flight
@@ -22,6 +24,9 @@ class TrackingService:
         return_date: str,
         max_price: float,
         date_flex_days: int = 0,
+        trip_type: str = "round-trip",
+        cabin_class: str = "economy",
+        max_stops: int | None = None,
     ):
 
         # Normalize possibly comma-separated, mixed-case input like
@@ -33,6 +38,9 @@ class TrackingService:
             return_date=return_date,
             max_price=max_price,
             date_flex_days=date_flex_days,
+            trip_type=trip_type,
+            cabin_class=cabin_class,
+            max_stops=max_stops,
         )
 
         add_flight(flight)
@@ -54,6 +62,9 @@ class TrackingService:
         return_date: str,
         max_price: float,
         date_flex_days: int = 0,
+        trip_type: str = "round-trip",
+        cabin_class: str = "economy",
+        max_stops: int | None = None,
     ):
 
         flight = Flight(
@@ -64,9 +75,31 @@ class TrackingService:
             return_date=return_date,
             max_price=max_price,
             date_flex_days=date_flex_days,
+            trip_type=trip_type,
+            cabin_class=cabin_class,
+            max_stops=max_stops,
         )
 
         update_flight(flight)
+
+    def update_tracking(
+        self,
+        flight_id: int,
+        last_price: float,
+        last_airline: str,
+        lowest_price_seen: float,
+        last_notified_price: float | None,
+        last_checked_at: str,
+    ):
+
+        update_flight_tracking(
+            flight_id=flight_id,
+            last_price=last_price,
+            last_airline=last_airline,
+            lowest_price_seen=lowest_price_seen,
+            last_notified_price=last_notified_price,
+            last_checked_at=last_checked_at,
+        )
 
     def get_by_position(self, position: int) -> Flight | None:
         """Resolve a 1-based position (as shown in /list) to a Flight.
@@ -103,3 +136,11 @@ class TrackingService:
     def history(self, limit: int = 20):
 
         return get_price_history(limit)
+
+    def route_history(self, flight: Flight, since_days: int | None = None):
+
+        return get_route_price_history(
+            origins=parse_codes(flight.origin),
+            destinations=parse_codes(flight.destination),
+            since_days=since_days,
+        )

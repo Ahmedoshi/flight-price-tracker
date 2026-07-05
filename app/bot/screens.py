@@ -5,14 +5,32 @@ from app.bot.keyboards import (
 )
 from app.config.settings import settings
 from app.scheduler.scheduler import get_status
+from app.services.analytics_service import AnalyticsService, TREND_EMOJI
 from app.services.tracking_service import TrackingService
 
 tracking = TrackingService()
+analytics = AnalyticsService()
 
 
-def _kiwi_enabled() -> bool:
+def _provider_status_lines() -> str:
 
-    return bool(settings.kiwi_api_key)
+    providers = [
+        ("Google Flights", True),
+        ("Kiwi.com", bool(settings.kiwi_api_key)),
+        ("Amadeus", bool(settings.amadeus_client_id and settings.amadeus_client_secret)),
+        ("Duffel", bool(settings.duffel_api_key)),
+        ("Skyscanner", bool(settings.skyscanner_api_key)),
+    ]
+
+    lines = []
+
+    for name, enabled in providers:
+
+        icon = "🟢" if enabled else "⚪"
+        status = "Ready" if enabled else "Not configured"
+        lines.append(f"{icon} {name} : {status}")
+
+    return "\n".join(lines)
 
 
 def home_screen():
@@ -50,8 +68,7 @@ def status_screen():
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "🟢 Bot : Online\n"
         "🟢 Database : Connected\n"
-        "🟢 Google Flights : Ready\n"
-        f"{'🟢 Kiwi.com : Ready' if _kiwi_enabled() else '⚪ Kiwi.com : Not configured'}\n"
+        f"{_provider_status_lines()}\n"
         f"{'🟢' if is_running else '⏸'} Scheduler : {'Running' if is_running else 'Paused'}\n\n"
         f"📍 Saved Flights : {len(flights)}"
     )
@@ -96,13 +113,22 @@ def flights_screen():
             f" (+/-{flight.date_flex_days}d)" if flight.date_flex_days else ""
         )
 
+        return_line = (
+            f"↩ Return : {flight.return_date}{flex_text}\n\n"
+            if flight.trip_type == "round-trip"
+            else "↩ One-way\n\n"
+        )
+
+        filters_line = _filters_summary(flight)
+
         text = (
             f"✈️ Flight #{position}\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{flight.origin} ➜ {flight.destination}\n\n"
             f"📅 Departure : {flight.departure_date}\n"
-            f"↩ Return : {flight.return_date}{flex_text}\n\n"
+            f"{return_line}"
             f"🎯 Target : {flight.max_price:.0f} SAR"
+            f"{filters_line}"
         )
 
         cards.append(
@@ -113,6 +139,22 @@ def flights_screen():
         )
 
     return cards
+
+
+def _filters_summary(flight) -> str:
+
+    parts = []
+
+    if flight.cabin_class != "economy":
+        parts.append(flight.cabin_class.replace("-", " ").title())
+
+    if flight.max_stops is not None:
+        parts.append("direct only" if flight.max_stops == 0 else f"max {flight.max_stops} stop(s)")
+
+    if not parts:
+        return ""
+
+    return "\n\n🎛 " + ", ".join(parts)
 
 
 def history_screen():
@@ -138,3 +180,60 @@ def history_screen():
         )
 
     return text, main_menu()
+
+
+def analytics_screen():
+
+    flights = tracking.list()
+
+    if not flights:
+
+        return [
+            (
+                "📊 Analytics\n\nNo saved flights yet.",
+                main_menu(),
+            )
+        ]
+
+    window_days = settings.analytics_window_days
+    cards = []
+
+    for position, flight in enumerate(flights, start=1):
+
+        stats = analytics.compute_stats(flight, since_days=window_days)
+
+        if stats is None:
+
+            text = (
+                f"📊 Flight #{position}\n\n"
+                f"{flight.origin} ➜ {flight.destination}\n\n"
+                "No price history yet — run a check first."
+            )
+            cards.append((text, main_menu()))
+            continue
+
+        trend_emoji = TREND_EMOJI.get(stats.trend, "➡️")
+
+        text = (
+            f"📊 Flight #{position} — last {window_days}d\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{flight.origin} ➜ {flight.destination}\n\n"
+            f"📉 Min : {stats.min_price:.0f} SAR\n"
+            f"📈 Max : {stats.max_price:.0f} SAR\n"
+            f"📊 Avg : {stats.avg_price:.0f} SAR\n"
+            f"{trend_emoji} Trend : {stats.trend}\n\n"
+            f"🗓 Best day to book : {stats.best_booking_day or '—'}\n"
+            f"🛫 Best departure day : {stats.best_departure_day or '—'}\n\n"
+            f"🔢 Based on {stats.count} check(s)"
+        )
+
+        if flight.last_price is not None:
+
+            recommendation = analytics.recommendation(
+                flight.last_price, stats, window_days
+            )
+            text += f"\n\n{recommendation}"
+
+        cards.append((text, main_menu()))
+
+    return cards

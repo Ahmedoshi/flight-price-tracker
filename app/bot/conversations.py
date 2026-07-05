@@ -9,20 +9,35 @@ from telegram.ext import (
 )
 
 from app.bot.keyboards import main_menu
+from app.services.analytics_service import AnalyticsService
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
 from app.utils.airports import parse_codes, validate_codes
 from app.utils.dates import is_valid_date
+from app.utils.flight_filters import (
+    DEFAULT_FILTERS,
+    format_filters,
+    parse_filter_tokens,
+)
 from app.utils.search_scope import validate_search_scope
 
 tracking = TrackingService()
 
+KEEP = "-"
 
-def _format_flex_prompt(step: str, total: str) -> str:
+FILTERS_PROMPT = (
+    "Advanced filters (all optional).\n"
+    "Send any of, space-separated: trip=oneway|round, "
+    "cabin=economy|premium-economy|business|first, stops=N "
+    "(0 = direct only).\n\n"
+    f"Send \"{KEEP}\" to skip / use defaults (round-trip, economy, any stops)."
+)
+
+
+def _flex_prompt() -> str:
 
     return (
-        f"Step {step}/{total}\n"
-        "Send how many days flexible (0-5). 0 = exact dates only.\n\n"
+        "How many days flexible (0-5)? 0 = exact dates only.\n\n"
         "e.g. \"3\" checks +/-3 days around your dates too."
     )
 
@@ -34,11 +49,12 @@ def _format_flex_prompt(step: str, total: str) -> str:
 (
     ADD_ORIGIN,
     ADD_DESTINATION,
+    ADD_FILTERS,
     ADD_DEPARTURE,
     ADD_RETURN,
     ADD_FLEX,
     ADD_TARGET,
-) = range(6)
+) = range(7)
 
 
 async def add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -46,11 +62,10 @@ async def add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    context.user_data.pop("add", None)
+    context.user_data["add"] = dict(DEFAULT_FILTERS)
 
     await query.message.reply_text(
         "➕ Add Flight\n\n"
-        "Step 1/6\n"
         "Send the ORIGIN airport code(s), comma-separated\n"
         "(e.g. RUH or RUH,DMM).\n\n"
         "Send /cancel to stop."
@@ -71,10 +86,9 @@ async def add_origin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ADD_ORIGIN
 
-    context.user_data.setdefault("add", {})["origin"] = codes
+    context.user_data["add"]["origin"] = codes
 
     await update.message.reply_text(
-        "Step 2/6\n"
         "Send the DESTINATION airport code(s), comma-separated\n"
         "(e.g. LIS or LIS,OPO)."
     )
@@ -96,9 +110,28 @@ async def add_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["add"]["destination"] = codes
 
-    await update.message.reply_text(
-        "Step 3/6\nSend the DEPARTURE date (YYYY-MM-DD)."
-    )
+    await update.message.reply_text(FILTERS_PROMPT)
+
+    return ADD_FILTERS
+
+
+async def add_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+    data = context.user_data["add"]
+
+    if text != KEEP:
+
+        tokens = text.split()
+        parsed, error = parse_filter_tokens(tokens)
+
+        if error:
+            await update.message.reply_text(f"❌ {error}")
+            return ADD_FILTERS
+
+        data.update(parsed)
+
+    await update.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
 
     return ADD_DEPARTURE
 
@@ -114,11 +147,16 @@ async def add_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ADD_DEPARTURE
 
-    context.user_data["add"]["departure_date"] = text
+    data = context.user_data["add"]
+    data["departure_date"] = text
 
-    await update.message.reply_text(
-        "Step 4/6\nSend the RETURN date (YYYY-MM-DD)."
-    )
+    if data["trip_type"] == "one-way":
+
+        data["return_date"] = ""
+        await update.message.reply_text(_flex_prompt())
+        return ADD_FLEX
+
+    await update.message.reply_text("Send the RETURN date (YYYY-MM-DD).")
 
     return ADD_RETURN
 
@@ -136,7 +174,7 @@ async def add_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["add"]["return_date"] = text
 
-    await update.message.reply_text(_format_flex_prompt("5", "6"))
+    await update.message.reply_text(_flex_prompt())
 
     return ADD_FLEX
 
@@ -165,7 +203,7 @@ async def add_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data["date_flex_days"] = flex_days
 
     await update.message.reply_text(
-        "Step 6/6\nSend your TARGET price in SAR (numbers only, e.g. 1800)."
+        "Send your TARGET price in SAR (numbers only, e.g. 1800)."
     )
 
     return ADD_TARGET
@@ -190,6 +228,9 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return_date=data["return_date"],
         max_price=max_price,
         date_flex_days=data["date_flex_days"],
+        trip_type=data["trip_type"],
+        cabin_class=data["cabin_class"],
+        max_stops=data["max_stops"],
     )
 
     flex_text = (
@@ -198,13 +239,22 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else ""
     )
 
+    filters_text = format_filters(data["trip_type"], data["cabin_class"], data["max_stops"])
+    filters_line = f"\n🎛 {filters_text}" if filters_text else ""
+
+    return_line = (
+        f"🔁 Return : {data['return_date']}\n"
+        if data["trip_type"] == "round-trip"
+        else "↩ One-way\n"
+    )
+
     await update.message.reply_text(
         text=(
             "✅ Flight Added\n\n"
             f"📍 {','.join(data['origin'])} ➜ {','.join(data['destination'])}\n\n"
             f"📅 Departure : {data['departure_date']}\n"
-            f"🔁 Return : {data['return_date']}"
-            f"{flex_text}\n\n"
+            f"{return_line}"
+            f"{flex_text}{filters_line}\n\n"
             f"🎯 Target : {max_price:.0f} SAR"
         ),
         reply_markup=main_menu(),
@@ -220,10 +270,11 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
 (
     CHECK_ORIGIN,
     CHECK_DESTINATION,
+    CHECK_FILTERS,
     CHECK_DEPARTURE,
     CHECK_RETURN,
     CHECK_FLEX,
-) = range(6, 11)
+) = range(7, 13)
 
 
 async def check_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,11 +282,10 @@ async def check_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    context.user_data.pop("check", None)
+    context.user_data["check"] = dict(DEFAULT_FILTERS)
 
     await query.message.reply_text(
         "🔍 Check Flight\n\n"
-        "Step 1/5\n"
         "Send the ORIGIN airport code(s), comma-separated\n"
         "(e.g. RUH or RUH,DMM).\n\n"
         "Send /cancel to stop."
@@ -256,10 +306,9 @@ async def check_origin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CHECK_ORIGIN
 
-    context.user_data.setdefault("check", {})["origin"] = codes
+    context.user_data["check"]["origin"] = codes
 
     await update.message.reply_text(
-        "Step 2/5\n"
         "Send the DESTINATION airport code(s), comma-separated\n"
         "(e.g. LIS or LIS,OPO)."
     )
@@ -281,9 +330,28 @@ async def check_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["check"]["destination"] = codes
 
-    await update.message.reply_text(
-        "Step 3/5\nSend the DEPARTURE date (YYYY-MM-DD)."
-    )
+    await update.message.reply_text(FILTERS_PROMPT)
+
+    return CHECK_FILTERS
+
+
+async def check_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+    data = context.user_data["check"]
+
+    if text != KEEP:
+
+        tokens = text.split()
+        parsed, error = parse_filter_tokens(tokens)
+
+        if error:
+            await update.message.reply_text(f"❌ {error}")
+            return CHECK_FILTERS
+
+        data.update(parsed)
+
+    await update.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
 
     return CHECK_DEPARTURE
 
@@ -299,11 +367,16 @@ async def check_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CHECK_DEPARTURE
 
-    context.user_data["check"]["departure_date"] = text
+    data = context.user_data["check"]
+    data["departure_date"] = text
 
-    await update.message.reply_text(
-        "Step 4/5\nSend the RETURN date (YYYY-MM-DD)."
-    )
+    if data["trip_type"] == "one-way":
+
+        data["return_date"] = ""
+        await update.message.reply_text(_flex_prompt())
+        return CHECK_FLEX
+
+    await update.message.reply_text("Send the RETURN date (YYYY-MM-DD).")
 
     return CHECK_RETURN
 
@@ -321,7 +394,7 @@ async def check_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["check"]["return_date"] = text
 
-    await update.message.reply_text(_format_flex_prompt("5", "5"))
+    await update.message.reply_text(_flex_prompt())
 
     return CHECK_FLEX
 
@@ -360,8 +433,11 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
             origin=",".join(data["origin"]),
             destination=",".join(data["destination"]),
             departure_date=data["departure_date"],
-            return_date=data["return_date"],
+            return_date=data["return_date"] or None,
             date_flex_days=flex_days,
+            trip_type=data["trip_type"],
+            cabin_class=data["cabin_class"],
+            max_stops=data["max_stops"],
         )
 
     except ValueError as exc:
@@ -387,12 +463,21 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"✈ Airline : {result.airline}\n\n"
         f"💰 Price : {result.price:.0f} {result.currency}\n\n"
         f"📍 Route : {result.origin} ➜ {result.destination}\n\n"
-        f"📅 Departure : {result.departure_date}\n\n"
-        f"🔁 Return : {result.return_date}"
+        f"📅 Departure : {result.departure_date}"
     )
+
+    if data["trip_type"] == "round-trip":
+        text += f"\n\n🔁 Return : {result.return_date}"
 
     if result.booking_url:
         text += f"\n\n🔗 {result.booking_url}"
+
+    recommendation = AnalyticsService().recommendation_for_route(
+        result.origin, result.destination, result.price
+    )
+
+    if recommendation:
+        text += f"\n\n{recommendation}"
 
     await update.message.reply_text(
         text=text,
@@ -409,21 +494,18 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
 (
     EDIT_ORIGIN,
     EDIT_DESTINATION,
+    EDIT_FILTERS,
     EDIT_DEPARTURE,
     EDIT_RETURN,
     EDIT_FLEX,
     EDIT_TARGET,
-) = range(11, 17)
-
-KEEP = "-"
+) = range(13, 20)
 
 
 async def edit_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
-
-    context.user_data.pop("edit", None)
 
     flight_id = int(query.data.split("_")[1])
     flight = tracking.get_by_id(flight_id)
@@ -444,12 +526,14 @@ async def edit_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "return_date": flight.return_date,
         "date_flex_days": flight.date_flex_days,
         "max_price": flight.max_price,
+        "trip_type": flight.trip_type,
+        "cabin_class": flight.cabin_class,
+        "max_stops": flight.max_stops,
     }
 
     await query.message.reply_text(
         "✏️ Edit Flight\n\n"
         f"Current origin: {flight.origin}\n\n"
-        "Step 1/6\n"
         "Send new ORIGIN airport code(s), comma-separated, "
         f"or send \"{KEEP}\" to keep it as is.\n\n"
         "Send /cancel to stop."
@@ -479,7 +563,6 @@ async def edit_origin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"Current destination: {','.join(data['destination'])}\n\n"
-        "Step 2/6\n"
         "Send new DESTINATION airport code(s), comma-separated, "
         f"or send \"{KEEP}\" to keep it as is."
     )
@@ -506,9 +589,34 @@ async def edit_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         data["destination"] = codes
 
+    current = format_filters(data["trip_type"], data["cabin_class"], data["max_stops"])
+
+    await update.message.reply_text(
+        f"Current filters: {current or 'round-trip, economy, any stops'}\n\n"
+        f"{FILTERS_PROMPT}"
+    )
+
+    return EDIT_FILTERS
+
+
+async def edit_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+    data = context.user_data["edit"]
+
+    if text != KEEP:
+
+        tokens = text.split()
+        parsed, error = parse_filter_tokens(tokens)
+
+        if error:
+            await update.message.reply_text(f"❌ {error}")
+            return EDIT_FILTERS
+
+        data.update(parsed)
+
     await update.message.reply_text(
         f"Current departure: {data['departure_date']}\n\n"
-        "Step 3/6\n"
         f"Send new DEPARTURE date (YYYY-MM-DD), or send \"{KEEP}\" to keep it."
     )
 
@@ -531,9 +639,18 @@ async def edit_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         data["departure_date"] = text
 
+    if data["trip_type"] == "one-way":
+
+        data["return_date"] = ""
+
+        await update.message.reply_text(
+            f"Current flex: +/-{data['date_flex_days']} day(s)\n\n"
+            f"{_flex_prompt()}\n\nSend \"{KEEP}\" to keep it."
+        )
+        return EDIT_FLEX
+
     await update.message.reply_text(
         f"Current return: {data['return_date']}\n\n"
-        "Step 4/6\n"
         f"Send new RETURN date (YYYY-MM-DD), or send \"{KEEP}\" to keep it."
     )
 
@@ -558,9 +675,7 @@ async def edit_return(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"Current flex: +/-{data['date_flex_days']} day(s)\n\n"
-        f"Step 5/6\n"
-        "Send how many days flexible (0-5), "
-        f"or send \"{KEEP}\" to keep it."
+        f"{_flex_prompt()}\n\nSend \"{KEEP}\" to keep it."
     )
 
     return EDIT_FLEX
@@ -592,7 +707,6 @@ async def edit_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"Current target: {data['max_price']:.0f} SAR\n\n"
-        "Step 6/6\n"
         f"Send new TARGET price in SAR, or send \"{KEEP}\" to keep it."
     )
 
@@ -615,8 +729,8 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Target price must be numeric.")
             return EDIT_TARGET
 
-    # Re-validate the final combination in case origin/destination changed
-    # after the flex value was already confirmed.
+    # Re-validate the final combination in case origin/destination/flex
+    # changed independently earlier in the conversation.
     error = validate_search_scope(
         data["origin"], data["destination"], data["date_flex_days"]
     )
@@ -637,6 +751,9 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return_date=data["return_date"],
         max_price=data["max_price"],
         date_flex_days=data["date_flex_days"],
+        trip_type=data["trip_type"],
+        cabin_class=data["cabin_class"],
+        max_stops=data["max_stops"],
     )
 
     flex_text = (
@@ -645,13 +762,22 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else ""
     )
 
+    filters_text = format_filters(data["trip_type"], data["cabin_class"], data["max_stops"])
+    filters_line = f"\n🎛 {filters_text}" if filters_text else ""
+
+    return_line = (
+        f"🔁 Return : {data['return_date']}\n"
+        if data["trip_type"] == "round-trip"
+        else "↩ One-way\n"
+    )
+
     await update.message.reply_text(
         text=(
             "✅ Flight Updated\n\n"
             f"📍 {','.join(data['origin'])} ➜ {','.join(data['destination'])}\n\n"
             f"📅 Departure : {data['departure_date']}\n"
-            f"🔁 Return : {data['return_date']}"
-            f"{flex_text}\n\n"
+            f"{return_line}"
+            f"{flex_text}{filters_line}\n\n"
             f"🎯 Target : {data['max_price']:.0f} SAR"
         ),
         reply_markup=main_menu(),
@@ -681,6 +807,7 @@ add_flight_conversation = ConversationHandler(
     states={
         ADD_ORIGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_origin)],
         ADD_DESTINATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_destination)],
+        ADD_FILTERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_filters)],
         ADD_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_departure)],
         ADD_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_return)],
         ADD_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_flex)],
@@ -698,6 +825,7 @@ check_flight_conversation = ConversationHandler(
     states={
         CHECK_ORIGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_origin)],
         CHECK_DESTINATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_destination)],
+        CHECK_FILTERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_filters)],
         CHECK_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_departure)],
         CHECK_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_return)],
         CHECK_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_flex)],
@@ -714,6 +842,7 @@ edit_flight_conversation = ConversationHandler(
     states={
         EDIT_ORIGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_origin)],
         EDIT_DESTINATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_destination)],
+        EDIT_FILTERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_filters)],
         EDIT_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_departure)],
         EDIT_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_return)],
         EDIT_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_flex)],

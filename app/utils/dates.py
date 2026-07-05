@@ -41,3 +41,15 @@ def date_range_pairs(
         )
 
     return pairs
+
+
+def single_date_range(date_str: str, flex_days: int) -> list[str]:
+    """Same idea as date_range_pairs but for a one-way trip: just the
+    departure date, shifted -flex_days..+flex_days."""
+
+    departure = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+    return [
+        (departure + timedelta(days=offset)).isoformat()
+        for offset in range(-flex_days, flex_days + 1)
+    ]

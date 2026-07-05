@@ -5,7 +5,8 @@ from app.models.flight_result import FlightResult
 from app.providers.provider_manager import ProviderManager
 from app.services.tracking_service import TrackingService
 from app.utils.airports import parse_codes
-from app.utils.dates import date_range_pairs, is_valid_date
+from app.utils.dates import date_range_pairs, is_valid_date, single_date_range
+from app.utils.flight_filters import VALID_CABIN_CLASSES, VALID_TRIP_TYPES
 from app.utils.search_scope import validate_search_scope
 
 # How many combinations (airport pairs x flexible dates) are searched
@@ -26,8 +27,11 @@ class FlightService:
         origin: str,
         destination: str,
         departure_date: str,
-        return_date: str,
+        return_date: str | None = None,
         date_flex_days: int = 0,
+        trip_type: str = "round-trip",
+        cabin_class: str = "economy",
+        max_stops: int | None = None,
     ) -> list[FlightResult]:
         """Search every origin/destination airport combination across
         the flexible date range, and return all results pooled from
@@ -35,21 +39,34 @@ class FlightService:
 
         origin / destination may each be a single airport code or a
         comma-separated list (e.g. "RUH,DMM"). date_flex_days shifts
-        the departure/return pair together by -N..+N days.
+        the departure (and, for round-trips, return) date together by
+        -N..+N days. return_date is ignored for one-way trips.
         """
 
         origins = parse_codes(origin)
         destinations = parse_codes(destination)
 
-        if not is_valid_date(departure_date) or not is_valid_date(return_date):
-            raise ValueError("Dates must be in YYYY-MM-DD format.")
+        if trip_type not in VALID_TRIP_TYPES:
+            raise ValueError(f"trip_type must be one of {', '.join(VALID_TRIP_TYPES)}.")
+
+        if cabin_class not in VALID_CABIN_CLASSES:
+            raise ValueError(f"cabin_class must be one of {', '.join(VALID_CABIN_CLASSES)}.")
+
+        if not is_valid_date(departure_date):
+            raise ValueError("Departure date must be in YYYY-MM-DD format.")
+
+        if trip_type == "round-trip" and not (return_date and is_valid_date(return_date)):
+            raise ValueError("Return date must be in YYYY-MM-DD format for round-trip.")
 
         error = validate_search_scope(origins, destinations, date_flex_days)
 
         if error:
             raise ValueError(error)
 
-        date_pairs = date_range_pairs(departure_date, return_date, date_flex_days)
+        if trip_type == "round-trip":
+            date_pairs = date_range_pairs(departure_date, return_date, date_flex_days)
+        else:
+            date_pairs = [(dep, "") for dep in single_date_range(departure_date, date_flex_days)]
 
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_SEARCHES)
 
@@ -62,6 +79,9 @@ class FlightService:
                     destination=d,
                     departure_date=dep,
                     return_date=ret,
+                    trip_type=trip_type,
+                    cabin_class=cabin_class,
+                    max_stops=max_stops,
                 )
 
                 return await self.provider_manager.search(flight)
@@ -86,8 +106,11 @@ class FlightService:
         origin: str,
         destination: str,
         departure_date: str,
-        return_date: str,
+        return_date: str | None = None,
         date_flex_days: int = 0,
+        trip_type: str = "round-trip",
+        cabin_class: str = "economy",
+        max_stops: int | None = None,
     ) -> FlightResult | None:
 
         results = await self.check_flight(
@@ -96,6 +119,9 @@ class FlightService:
             departure_date,
             return_date,
             date_flex_days,
+            trip_type,
+            cabin_class,
+            max_stops,
         )
 
         if not results:

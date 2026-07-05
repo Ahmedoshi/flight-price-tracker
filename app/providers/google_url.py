@@ -10,14 +10,16 @@ class GoogleFlightsURLBuilder:
         origin: str,
         destination: str,
         departure: str,
-        return_date: str,
+        return_date: str = "",
     ) -> str:
 
         query = (
             f"?q=Flights%20from%20{quote(origin)}"
             f"%20to%20{quote(destination)}"
             f"%20{departure}"
-            f"%20{return_date}"
         )
+
+        if return_date:
+            query += f"%20{return_date}"
 
         return GoogleFlightsURLBuilder.BASE_URL + query

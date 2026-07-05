@@ -18,23 +18,31 @@ class GoogleFlightsProvider(BaseProvider):
 
     async def search(self, flight: Flight) -> list[FlightResult]:
 
-        query = create_query(
-            flights=[
-                FlightQuery(
-                    date=flight.departure_date,
-                    from_airport=flight.origin,
-                    to_airport=flight.destination,
-                ),
+        flight_legs = [
+            FlightQuery(
+                date=flight.departure_date,
+                from_airport=flight.origin,
+                to_airport=flight.destination,
+            ),
+        ]
+
+        if flight.trip_type == "round-trip":
+
+            flight_legs.append(
                 FlightQuery(
                     date=flight.return_date,
                     from_airport=flight.destination,
                     to_airport=flight.origin,
-                ),
-            ],
-            trip="round-trip",
-            seat="economy",
+                )
+            )
+
+        query = create_query(
+            flights=flight_legs,
+            trip=flight.trip_type,
+            seat=flight.cabin_class,
             passengers=Passengers(adults=1),
             currency="SAR",
+            max_stops=flight.max_stops,
         )
 
         try:

@@ -9,6 +9,14 @@ from app.providers.base_provider import BaseProvider
 
 TEQUILA_SEARCH_URL = "https://api.tequila.kiwi.com/v2/search"
 
+# Kiwi's selected_cabins uses single-letter codes.
+CABIN_LOOKUP = {
+    "economy": "M",
+    "premium-economy": "W",
+    "business": "C",
+    "first": "F",
+}
+
 
 class KiwiFlightsProvider(BaseProvider):
     """Flight search via the Kiwi.com Tequila API.
@@ -25,21 +33,28 @@ class KiwiFlightsProvider(BaseProvider):
             return []
 
         departure = _to_kiwi_date(flight.departure_date)
-        return_date = _to_kiwi_date(flight.return_date)
+        is_round_trip = flight.trip_type == "round-trip"
 
         params = {
             "fly_from": flight.origin,
             "fly_to": flight.destination,
             "date_from": departure,
             "date_to": departure,
-            "return_from": return_date,
-            "return_to": return_date,
-            "flight_type": "round",
+            "flight_type": "round" if is_round_trip else "oneway",
             "adults": 1,
             "curr": "SAR",
             "limit": 5,
             "sort": "price",
+            "selected_cabins": CABIN_LOOKUP.get(flight.cabin_class, "M"),
         }
+
+        if is_round_trip:
+            return_date = _to_kiwi_date(flight.return_date)
+            params["return_from"] = return_date
+            params["return_to"] = return_date
+
+        if flight.max_stops is not None:
+            params["max_stopovers"] = flight.max_stops
 
         headers = {"apikey": settings.kiwi_api_key}
 

@@ -36,6 +36,13 @@ def main_menu():
 
         [
             InlineKeyboardButton(
+                "📊 Analytics",
+                callback_data="menu_analytics",
+            ),
+        ],
+
+        [
+            InlineKeyboardButton(
                 "⚙️ Scheduler",
                 callback_data="menu_scheduler",
             ),

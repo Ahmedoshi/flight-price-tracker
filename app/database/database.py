@@ -56,6 +56,14 @@ def initialize_database():
     )
 
     _ensure_column(conn, "flights", "date_flex_days", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "flights", "trip_type", "TEXT NOT NULL DEFAULT 'round-trip'")
+    _ensure_column(conn, "flights", "cabin_class", "TEXT NOT NULL DEFAULT 'economy'")
+    _ensure_column(conn, "flights", "max_stops", "INTEGER")
+    _ensure_column(conn, "flights", "last_price", "REAL")
+    _ensure_column(conn, "flights", "last_airline", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "flights", "lowest_price_seen", "REAL")
+    _ensure_column(conn, "flights", "last_notified_price", "REAL")
+    _ensure_column(conn, "flights", "last_checked_at", "TEXT")
 
     conn.commit()
     conn.close()
@@ -90,11 +98,14 @@ def add_flight(flight: Flight):
             departure_date,
             return_date,
             max_price,
-            date_flex_days
+            date_flex_days,
+            trip_type,
+            cabin_class,
+            max_stops
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
@@ -104,6 +115,9 @@ def add_flight(flight: Flight):
             flight.return_date,
             flight.max_price,
             flight.date_flex_days,
+            flight.trip_type,
+            flight.cabin_class,
+            flight.max_stops,
         ),
     )
 
@@ -124,7 +138,15 @@ def get_all_flights():
             departure_date,
             return_date,
             max_price,
-            date_flex_days
+            date_flex_days,
+            trip_type,
+            cabin_class,
+            max_stops,
+            last_price,
+            last_airline,
+            lowest_price_seen,
+            last_notified_price,
+            last_checked_at
         FROM flights
         ORDER BY id
         """
@@ -145,6 +167,14 @@ def get_all_flights():
                 return_date=row[4],
                 max_price=row[5],
                 date_flex_days=row[6],
+                trip_type=row[7] or "round-trip",
+                cabin_class=row[8] or "economy",
+                max_stops=row[9],
+                last_price=row[10],
+                last_airline=row[11] or "",
+                lowest_price_seen=row[12],
+                last_notified_price=row[13],
+                last_checked_at=row[14],
             )
         )
 
@@ -239,6 +269,45 @@ def get_price_history(limit: int = 20):
     return rows
 
 
+def get_route_price_history(
+    origins: list[str],
+    destinations: list[str],
+    since_days: int | None = None,
+):
+    """Price history rows for a specific origin/destination set.
+
+    price_history stores the exact resolved airport pair each check
+    used (never the raw comma-list), so matching is done with IN
+    clauses over the flight's individual airport codes.
+    """
+
+    conn = get_connection()
+
+    origin_placeholders = ",".join(["?"] * len(origins))
+    destination_placeholders = ",".join(["?"] * len(destinations))
+
+    query = f"""
+        SELECT price, departure_date, checked_at
+        FROM price_history
+        WHERE origin IN ({origin_placeholders})
+          AND destination IN ({destination_placeholders})
+    """
+
+    params = [*origins, *destinations]
+
+    if since_days is not None:
+        query += " AND checked_at >= datetime('now', ?)"
+        params.append(f"-{since_days} days")
+
+    query += " ORDER BY checked_at"
+
+    rows = conn.execute(query, params).fetchall()
+
+    conn.close()
+
+    return rows
+
+
 def update_flight(flight: Flight):
 
     conn = get_connection()
@@ -252,7 +321,10 @@ def update_flight(flight: Flight):
             departure_date = ?,
             return_date = ?,
             max_price = ?,
-            date_flex_days = ?
+            date_flex_days = ?,
+            trip_type = ?,
+            cabin_class = ?,
+            max_stops = ?
         WHERE id = ?
         """,
         (
@@ -262,7 +334,52 @@ def update_flight(flight: Flight):
             flight.return_date,
             flight.max_price,
             flight.date_flex_days,
+            flight.trip_type,
+            flight.cabin_class,
+            flight.max_stops,
             flight.id,
+        ),
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def update_flight_tracking(
+    flight_id: int,
+    last_price: float,
+    last_airline: str,
+    lowest_price_seen: float,
+    last_notified_price: float | None,
+    last_checked_at: str,
+):
+    """Persist monitoring state after a scheduled check.
+
+    Kept separate from update_flight() since this is system-driven
+    (the rule engine deciding what it just observed), not a
+    user-initiated edit.
+    """
+
+    conn = get_connection()
+
+    conn.execute(
+        """
+        UPDATE flights
+        SET
+            last_price = ?,
+            last_airline = ?,
+            lowest_price_seen = ?,
+            last_notified_price = ?,
+            last_checked_at = ?
+        WHERE id = ?
+        """,
+        (
+            last_price,
+            last_airline,
+            lowest_price_seen,
+            last_notified_price,
+            last_checked_at,
+            flight_id,
         ),
     )
 

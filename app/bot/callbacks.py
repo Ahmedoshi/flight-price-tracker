@@ -12,6 +12,7 @@ from app.bot.screens import (
     scheduler_screen,
     flights_screen,
     history_screen,
+    analytics_screen,
 )
 from app.scheduler.scheduler import (
     hourly_check,
@@ -19,6 +20,7 @@ from app.scheduler.scheduler import (
     resume_scheduler,
     set_interval_hours,
 )
+from app.services.analytics_service import AnalyticsService
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
 
@@ -172,6 +174,21 @@ async def button_click(
         )
 
     # ==========================
+    # ANALYTICS
+    # ==========================
+
+    elif query.data == "menu_analytics":
+
+        cards = analytics_screen()
+
+        for text, keyboard in cards:
+
+            await query.message.reply_text(
+                text=text,
+                reply_markup=keyboard,
+            )
+
+    # ==========================
     # CHECK FLIGHT (interactive search wizard)
     # ==========================
     # menu_check / menu_add are handled by the ConversationHandlers in
@@ -207,6 +224,9 @@ async def button_click(
                     departure_date=flight.departure_date,
                     return_date=flight.return_date,
                     date_flex_days=flight.date_flex_days,
+                    trip_type=flight.trip_type,
+                    cabin_class=flight.cabin_class,
+                    max_stops=flight.max_stops,
                 )
 
             except ValueError as exc:
@@ -232,12 +252,21 @@ async def button_click(
                     f"✈ Airline : {result.airline}\n\n"
                     f"💰 Price : {result.price:.0f} {result.currency}\n\n"
                     f"📍 Route : {result.origin} ➜ {result.destination}\n\n"
-                    f"📅 Departure : {result.departure_date}\n\n"
-                    f"🔁 Return : {result.return_date}"
+                    f"📅 Departure : {result.departure_date}"
                 )
+
+                if flight.trip_type == "round-trip":
+                    text += f"\n\n🔁 Return : {result.return_date}"
 
                 if result.booking_url:
                     text += f"\n\n🔗 {result.booking_url}"
+
+                recommendation = AnalyticsService().recommendation_for_route(
+                    result.origin, result.destination, result.price
+                )
+
+                if recommendation:
+                    text += f"\n\n{recommendation}"
 
                 await query.message.reply_text(
                     text=text,
