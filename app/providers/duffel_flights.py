@@ -40,6 +40,11 @@ class DuffelFlightsProvider(BaseProvider):
         if not settings.duffel_api_key:
             return []
 
+        if flight.trip_type == "multi-city":
+            # Duffel does support multi-slice offer requests, but that
+            # needs a dedicated request shape - not wired up yet.
+            return []
+
         slices = [
             {
                 "origin": flight.origin,

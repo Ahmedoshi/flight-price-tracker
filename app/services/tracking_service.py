@@ -27,13 +27,16 @@ class TrackingService:
         trip_type: str = "round-trip",
         cabin_class: str = "economy",
         max_stops: int | None = None,
+        legs: list[dict] | None = None,
     ):
 
         # Normalize possibly comma-separated, mixed-case input like
         # "ruh, dmm" into a clean "RUH,DMM" for consistent storage.
+        # Multi-city legs are already resolved single airport codes, so
+        # they're stored as-is rather than run through parse_codes().
         flight = Flight(
-            origin=",".join(parse_codes(origin)),
-            destination=",".join(parse_codes(destination)),
+            origin=",".join(parse_codes(origin)) if legs is None else origin,
+            destination=",".join(parse_codes(destination)) if legs is None else destination,
             departure_date=departure_date,
             return_date=return_date,
             max_price=max_price,
@@ -41,6 +44,7 @@ class TrackingService:
             trip_type=trip_type,
             cabin_class=cabin_class,
             max_stops=max_stops,
+            legs=legs,
         )
 
         add_flight(flight)
@@ -65,12 +69,13 @@ class TrackingService:
         trip_type: str = "round-trip",
         cabin_class: str = "economy",
         max_stops: int | None = None,
+        legs: list[dict] | None = None,
     ):
 
         flight = Flight(
             id=flight_id,
-            origin=",".join(parse_codes(origin)),
-            destination=",".join(parse_codes(destination)),
+            origin=",".join(parse_codes(origin)) if legs is None else origin,
+            destination=",".join(parse_codes(destination)) if legs is None else destination,
             departure_date=departure_date,
             return_date=return_date,
             max_price=max_price,
@@ -78,6 +83,7 @@ class TrackingService:
             trip_type=trip_type,
             cabin_class=cabin_class,
             max_stops=max_stops,
+            legs=legs,
         )
 
         update_flight(flight)

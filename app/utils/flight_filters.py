@@ -1,4 +1,4 @@
-VALID_TRIP_TYPES = {"round-trip", "one-way"}
+VALID_TRIP_TYPES = {"round-trip", "one-way", "multi-city"}
 VALID_CABIN_CLASSES = {"economy", "premium-economy", "business", "first"}
 
 DEFAULT_FILTERS = {
@@ -113,6 +113,9 @@ def format_filters(trip_type: str, cabin_class: str, max_stops: int | None) -> s
 
     if trip_type == "one-way":
         parts.append("one-way")
+
+    if trip_type == "multi-city":
+        parts.append("multi-city")
 
     if cabin_class != "economy":
         parts.append(cabin_class.replace("-", " ").title())

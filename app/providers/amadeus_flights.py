@@ -56,6 +56,12 @@ class AmadeusFlightsProvider(BaseProvider):
         if not (settings.amadeus_client_id and settings.amadeus_client_secret):
             return []
 
+        if flight.trip_type == "multi-city":
+            # Amadeus supports multi-city via a separate endpoint
+            # (flight-offers-search with multiple originDestinations) -
+            # not wired up yet, skip rather than misreport.
+            return []
+
         try:
             token = await self._get_access_token()
 

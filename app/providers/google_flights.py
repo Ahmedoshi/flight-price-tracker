@@ -18,23 +18,39 @@ class GoogleFlightsProvider(BaseProvider):
 
     async def search(self, flight: Flight) -> list[FlightResult]:
 
-        flight_legs = [
-            FlightQuery(
-                date=flight.departure_date,
-                from_airport=flight.origin,
-                to_airport=flight.destination,
-            ),
-        ]
+        if flight.trip_type == "multi-city":
 
-        if flight.trip_type == "round-trip":
+            if not flight.legs or len(flight.legs) < 2:
+                return []
 
-            flight_legs.append(
+            flight_legs = [
                 FlightQuery(
-                    date=flight.return_date,
-                    from_airport=flight.destination,
-                    to_airport=flight.origin,
+                    date=leg["date"],
+                    from_airport=leg["origin"],
+                    to_airport=leg["destination"],
                 )
-            )
+                for leg in flight.legs
+            ]
+
+        else:
+
+            flight_legs = [
+                FlightQuery(
+                    date=flight.departure_date,
+                    from_airport=flight.origin,
+                    to_airport=flight.destination,
+                ),
+            ]
+
+            if flight.trip_type == "round-trip":
+
+                flight_legs.append(
+                    FlightQuery(
+                        date=flight.return_date,
+                        from_airport=flight.destination,
+                        to_airport=flight.origin,
+                    )
+                )
 
         query = create_query(
             flights=flight_legs,
@@ -61,12 +77,18 @@ class GoogleFlightsProvider(BaseProvider):
 
         output = []
 
-        booking_url = GoogleFlightsURLBuilder.build(
-            origin=flight.origin,
-            destination=flight.destination,
-            departure=flight.departure_date,
-            return_date=flight.return_date,
-        )
+        if flight.trip_type == "multi-city":
+            # The URL builder only understands a single origin/destination
+            # pair, so there's no clean deep link for a multi-leg
+            # itinerary yet - leave it blank rather than show a wrong one.
+            booking_url = ""
+        else:
+            booking_url = GoogleFlightsURLBuilder.build(
+                origin=flight.origin,
+                destination=flight.destination,
+                departure=flight.departure_date,
+                return_date=flight.return_date,
+            )
 
         print("\n========== RAW FAST-FLIGHTS ==========")
 

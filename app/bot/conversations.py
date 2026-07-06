@@ -28,6 +28,10 @@ FILTERS_SCREEN_TEXT = (
 
 CABIN_ORDER = ["economy", "premium-economy", "business", "first"]
 STOPS_ORDER = [None, 0, 1, 2]
+TRIP_ORDER = ["round-trip", "one-way", "multi-city"]
+
+MULTI_CITY_MIN_LEGS = 2
+MULTI_CITY_MAX_LEGS = 5
 
 
 def _flex_prompt() -> str:
@@ -42,9 +46,8 @@ def _apply_filter_toggle(callback_data: str, data: dict):
 
     if callback_data == "af_trip":
 
-        data["trip_type"] = (
-            "one-way" if data["trip_type"] == "round-trip" else "round-trip"
-        )
+        idx = TRIP_ORDER.index(data["trip_type"])
+        data["trip_type"] = TRIP_ORDER[(idx + 1) % len(TRIP_ORDER)]
 
     elif callback_data == "af_cabin":
 

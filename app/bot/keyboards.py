@@ -8,7 +8,12 @@ def filters_keyboard(trip_type: str, cabin_class: str, max_stops: int | None):
     so there's nothing to type or get wrong - just tap until it shows
     what you want, then Continue."""
 
-    trip_label = "🔁 Round-trip" if trip_type == "round-trip" else "➡️ One-way"
+    trip_labels = {
+        "round-trip": "🔁 Round-trip",
+        "one-way": "➡️ One-way",
+        "multi-city": "🌍 Multi-city",
+    }
+    trip_label = trip_labels.get(trip_type, "🔁 Round-trip")
     cabin_label = f"💺 {cabin_class.replace('-', ' ').title()}"
 
     if max_stops is None:

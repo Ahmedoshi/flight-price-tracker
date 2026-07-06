@@ -101,6 +101,66 @@ class FlightService:
 
         return results
 
+    async def check_multi_city(
+        self,
+        legs: list[dict],
+        cabin_class: str = "economy",
+        max_stops: int | None = None,
+    ) -> list[FlightResult]:
+        """Search a fixed multi-city itinerary (2-5 legs, each a dict
+        with origin/destination/date). Unlike check_flight(), there's
+        no flexible-date or multi-airport combinatorial expansion here
+        - multi-city legs are exact, as entered.
+
+        Only providers that implement multi-city search will return
+        anything (currently Google Flights only); the rest skip
+        themselves via their own trip_type == "multi-city" guard.
+        """
+
+        if len(legs) < 2:
+            raise ValueError("A multi-city trip needs at least 2 legs.")
+
+        if cabin_class not in VALID_CABIN_CLASSES:
+            raise ValueError(f"cabin_class must be one of {', '.join(VALID_CABIN_CLASSES)}.")
+
+        for leg in legs:
+            if not is_valid_date(leg["date"]):
+                raise ValueError(f"Leg date '{leg['date']}' must be in YYYY-MM-DD format.")
+
+        flight = Flight(
+            origin=legs[0]["origin"],
+            destination=legs[-1]["destination"],
+            departure_date=legs[0]["date"],
+            return_date="",
+            trip_type="multi-city",
+            cabin_class=cabin_class,
+            max_stops=max_stops,
+            legs=legs,
+        )
+
+        results = await self.provider_manager.search(flight)
+        results.sort(key=lambda x: x.price)
+
+        return results
+
+    async def cheapest_multi_city(
+        self,
+        legs: list[dict],
+        cabin_class: str = "economy",
+        max_stops: int | None = None,
+    ) -> FlightResult | None:
+
+        results = await self.check_multi_city(legs, cabin_class, max_stops)
+
+        if not results:
+            return None
+
+        result = results[0]
+
+        self.tracking.save_result(result)
+
+        return result
+
     async def cheapest_flight(
         self,
         origin: str,

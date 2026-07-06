@@ -32,6 +32,11 @@ class KiwiFlightsProvider(BaseProvider):
         if not settings.kiwi_api_key:
             return []
 
+        if flight.trip_type == "multi-city":
+            # Tequila's search endpoint doesn't cleanly support arbitrary
+            # multi-leg itineraries - skip rather than return wrong data.
+            return []
+
         departure = _to_kiwi_date(flight.departure_date)
         is_round_trip = flight.trip_type == "round-trip"
 

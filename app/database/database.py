@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from pathlib import Path
 
@@ -64,6 +65,7 @@ def initialize_database():
     _ensure_column(conn, "flights", "lowest_price_seen", "REAL")
     _ensure_column(conn, "flights", "last_notified_price", "REAL")
     _ensure_column(conn, "flights", "last_checked_at", "TEXT")
+    _ensure_column(conn, "flights", "legs", "TEXT")
 
     conn.commit()
     conn.close()
@@ -101,11 +103,12 @@ def add_flight(flight: Flight):
             date_flex_days,
             trip_type,
             cabin_class,
-            max_stops
+            max_stops,
+            legs
         )
         VALUES
         (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
@@ -118,6 +121,7 @@ def add_flight(flight: Flight):
             flight.trip_type,
             flight.cabin_class,
             flight.max_stops,
+            json.dumps(flight.legs) if flight.legs else None,
         ),
     )
 
@@ -146,7 +150,8 @@ def get_all_flights():
             last_airline,
             lowest_price_seen,
             last_notified_price,
-            last_checked_at
+            last_checked_at,
+            legs
         FROM flights
         ORDER BY id
         """
@@ -175,6 +180,7 @@ def get_all_flights():
                 lowest_price_seen=row[12],
                 last_notified_price=row[13],
                 last_checked_at=row[14],
+                legs=json.loads(row[15]) if row[15] else None,
             )
         )
 
@@ -324,7 +330,8 @@ def update_flight(flight: Flight):
             date_flex_days = ?,
             trip_type = ?,
             cabin_class = ?,
-            max_stops = ?
+            max_stops = ?,
+            legs = ?
         WHERE id = ?
         """,
         (
@@ -337,6 +344,7 @@ def update_flight(flight: Flight):
             flight.trip_type,
             flight.cabin_class,
             flight.max_stops,
+            json.dumps(flight.legs) if flight.legs else None,
             flight.id,
         ),
     )

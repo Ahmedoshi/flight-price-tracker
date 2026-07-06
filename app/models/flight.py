@@ -23,3 +23,10 @@ class Flight:
     lowest_price_seen: float | None = None
     last_notified_price: float | None = None
     last_checked_at: str | None = None
+
+    # Multi-city itinerary (trip_type == "multi-city"). Each leg is a
+    # dict: {"origin": str, "destination": str, "date": "YYYY-MM-DD"}.
+    # origin/destination/departure_date above are set to the first
+    # leg's origin and the last leg's destination/date for display and
+    # price-history matching purposes; return_date is left blank.
+    legs: list[dict] | None = None
