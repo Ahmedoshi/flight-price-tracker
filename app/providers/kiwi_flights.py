@@ -27,6 +27,8 @@ class KiwiFlightsProvider(BaseProvider):
     is somehow called without one.
     """
 
+    NAME = "Kiwi.com"
+
     async def search(self, flight: Flight) -> list[FlightResult]:
 
         if not settings.kiwi_api_key:

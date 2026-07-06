@@ -85,6 +85,31 @@ class Settings(BaseSettings):
     # and the buy-now recommendation.
     analytics_window_days: int = 45
 
+    # --- Provider reliability (Roadmap Phase 1) ---
+
+    # Per-attempt timeout for a single provider's search() call. A slow
+    # provider shouldn't be able to stall the whole multi-provider
+    # search indefinitely.
+    provider_timeout_seconds: float = 15.0
+
+    # How many extra attempts after the first, on timeout/network
+    # errors only (not on a provider's own "no flights found" result,
+    # which isn't a failure). 2 retries = 3 attempts total.
+    provider_max_retries: int = 2
+
+    # Base delay before the first retry; doubles each subsequent retry
+    # (1s, 2s, 4s, ...) - standard exponential backoff.
+    provider_retry_backoff_seconds: float = 1.0
+
+    # After this many consecutive failed calls, a provider is marked
+    # "offline" and skipped entirely (instead of spending a timeout +
+    # retries on every single check) until the cooldown below passes.
+    provider_failure_threshold: int = 5
+
+    # How long a provider stays auto-disabled after tripping the
+    # failure threshold before it's given another chance.
+    provider_disable_cooldown_minutes: float = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

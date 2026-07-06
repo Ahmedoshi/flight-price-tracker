@@ -56,6 +56,24 @@ def initialize_database():
         """
     )
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS provider_health (
+
+            provider TEXT PRIMARY KEY,
+
+            total_checks INTEGER NOT NULL DEFAULT 0,
+            success_count INTEGER NOT NULL DEFAULT 0,
+            success_response_ms REAL NOT NULL DEFAULT 0,
+
+            consecutive_failures INTEGER NOT NULL DEFAULT 0,
+            disabled_until TEXT,
+            last_error TEXT,
+            last_checked_at TEXT
+        )
+        """
+    )
+
     _ensure_column(conn, "flights", "date_flex_days", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "flights", "trip_type", "TEXT NOT NULL DEFAULT 'round-trip'")
     _ensure_column(conn, "flights", "cabin_class", "TEXT NOT NULL DEFAULT 'economy'")
@@ -405,6 +423,136 @@ def delete_flight(flight_id: int):
         WHERE id = ?
         """,
         (flight_id,),
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_provider_health(provider: str) -> dict | None:
+    """Raw stored health row for one provider, or None if it's never
+    been checked yet. See app/services/provider_health.py for the
+    higher-level API (success rate, avg response time, disabled
+    status) built on top of this."""
+
+    conn = get_connection()
+
+    row = conn.execute(
+        """
+        SELECT
+            provider,
+            total_checks,
+            success_count,
+            success_response_ms,
+            consecutive_failures,
+            disabled_until,
+            last_error,
+            last_checked_at
+        FROM provider_health
+        WHERE provider = ?
+        """,
+        (provider,),
+    ).fetchone()
+
+    conn.close()
+
+    if row is None:
+        return None
+
+    return {
+        "provider": row[0],
+        "total_checks": row[1],
+        "success_count": row[2],
+        "success_response_ms": row[3],
+        "consecutive_failures": row[4],
+        "disabled_until": row[5],
+        "last_error": row[6],
+        "last_checked_at": row[7],
+    }
+
+
+def get_all_provider_health() -> dict[str, dict]:
+
+    conn = get_connection()
+
+    rows = conn.execute(
+        """
+        SELECT
+            provider,
+            total_checks,
+            success_count,
+            success_response_ms,
+            consecutive_failures,
+            disabled_until,
+            last_error,
+            last_checked_at
+        FROM provider_health
+        """
+    ).fetchall()
+
+    conn.close()
+
+    return {
+        row[0]: {
+            "provider": row[0],
+            "total_checks": row[1],
+            "success_count": row[2],
+            "success_response_ms": row[3],
+            "consecutive_failures": row[4],
+            "disabled_until": row[5],
+            "last_error": row[6],
+            "last_checked_at": row[7],
+        }
+        for row in rows
+    }
+
+
+def upsert_provider_health(
+    provider: str,
+    total_checks: int,
+    success_count: int,
+    success_response_ms: float,
+    consecutive_failures: int,
+    disabled_until: str | None,
+    last_error: str | None,
+    last_checked_at: str,
+):
+
+    conn = get_connection()
+
+    conn.execute(
+        """
+        INSERT INTO provider_health
+        (
+            provider,
+            total_checks,
+            success_count,
+            success_response_ms,
+            consecutive_failures,
+            disabled_until,
+            last_error,
+            last_checked_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(provider) DO UPDATE SET
+            total_checks = excluded.total_checks,
+            success_count = excluded.success_count,
+            success_response_ms = excluded.success_response_ms,
+            consecutive_failures = excluded.consecutive_failures,
+            disabled_until = excluded.disabled_until,
+            last_error = excluded.last_error,
+            last_checked_at = excluded.last_checked_at
+        """,
+        (
+            provider,
+            total_checks,
+            success_count,
+            success_response_ms,
+            consecutive_failures,
+            disabled_until,
+            last_error,
+            last_checked_at,
+        ),
     )
 
     conn.commit()

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.bot.keyboards import (
     main_menu,
     scheduler_menu,
@@ -5,6 +7,7 @@ from app.bot.keyboards import (
 )
 from app.config.settings import settings
 from app.scheduler.scheduler import get_status
+from app.services import provider_health
 from app.services.analytics_service import AnalyticsService, TREND_EMOJI
 from app.services.tracking_service import TrackingService
 
@@ -26,9 +29,38 @@ def _provider_status_lines() -> str:
 
     for name, enabled in providers:
 
-        icon = "🟢" if enabled else "⚪"
-        status = "Ready" if enabled else "Not configured"
-        lines.append(f"{icon} {name} : {status}")
+        if not enabled:
+            lines.append(f"⚪ {name} : Not configured")
+            continue
+
+        stats = provider_health.get_stats(name)
+
+        if stats["offline"]:
+
+            retry_mins = max(
+                0,
+                int((stats["disabled_until"] - datetime.now(timezone.utc)).total_seconds() // 60),
+            )
+            lines.append(f"🔴 {name} : Offline (retrying in ~{retry_mins}m)")
+            continue
+
+        if stats["total_checks"] == 0:
+            lines.append(f"🟢 {name} : Ready")
+            continue
+
+        if stats["avg_response_seconds"] is None:
+            # Has failures but hasn't tripped the auto-disable
+            # threshold (or hasn't succeeded even once) yet.
+            lines.append(
+                f"🟡 {name} : Struggling — {stats['success_rate_pct']:.0f}% success "
+                f"({stats['total_checks']} checks, {stats['consecutive_failures']} failures in a row)"
+            )
+            continue
+
+        lines.append(
+            f"🟢 {name} : Ready — avg {stats['avg_response_seconds']:.1f}s, "
+            f"{stats['success_rate_pct']:.0f}% success ({stats['total_checks']} checks)"
+        )
 
     return "\n".join(lines)
 

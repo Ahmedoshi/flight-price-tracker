@@ -6,6 +6,12 @@ from app.models.flight_result import FlightResult
 
 class BaseProvider(ABC):
 
+    # Stable display name used for health tracking (app/services/
+    # provider_health.py) and the Status screen - independent of
+    # whatever FlightResult.provider string a given search() call
+    # returns, since a failing call returns no results at all.
+    NAME = "Unknown Provider"
+
     # Whether ProviderManager should include this provider in
     # scheduler-driven (hourly, automatic) checks, as opposed to
     # manual ones (/check, the Check Flight wizard, "Check Now").

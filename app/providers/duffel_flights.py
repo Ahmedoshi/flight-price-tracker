@@ -36,6 +36,8 @@ OFFER_REQUESTS_URL = "https://api.duffel.com/air/offer_requests"
 
 class DuffelFlightsProvider(BaseProvider):
 
+    NAME = "Duffel"
+
     async def search(self, flight: Flight) -> list[FlightResult]:
 
         if not settings.duffel_api_key:

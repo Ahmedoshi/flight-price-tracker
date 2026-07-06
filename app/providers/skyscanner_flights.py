@@ -59,6 +59,8 @@ CABIN_LOOKUP = {
 
 class SkyscannerFlightsProvider(BaseProvider):
 
+    NAME = "Skyscanner"
+
     # Deliberately excluded from the scheduler's hourly checks - see
     # the module docstring for why (20 requests/month free tier).
     ALLOWED_IN_SCHEDULED_CHECKS = False

@@ -16,6 +16,8 @@ from app.providers.google_url import GoogleFlightsURLBuilder
 
 class GoogleFlightsProvider(BaseProvider):
 
+    NAME = "Google Flights"
+
     async def search(self, flight: Flight) -> list[FlightResult]:
 
         if flight.trip_type == "multi-city":

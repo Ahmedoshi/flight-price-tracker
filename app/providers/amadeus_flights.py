@@ -51,6 +51,8 @@ _token_cache: dict = {"access_token": None, "expires_at": 0}
 
 class AmadeusFlightsProvider(BaseProvider):
 
+    NAME = "Amadeus"
+
     async def search(self, flight: Flight) -> list[FlightResult]:
 
         if not (settings.amadeus_client_id and settings.amadeus_client_secret):
