@@ -31,14 +31,19 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # --- WhatsApp notifications (via Twilio) ---
-    # twilio_sid/twilio_token/twilio_phone match the TWILIO_SID/
-    # TWILIO_TOKEN/TWILIO_PHONE variable names already used in
-    # Railway. twilio_phone is Twilio's own WhatsApp-enabled sender
-    # number (the sandbox number while testing, e.g. +14155238886, or
-    # your approved WhatsApp Business sender) - with or without a
-    # leading "whatsapp:" prefix, either is accepted.
+    # twilio_sid/twilio_token match the TWILIO_SID/TWILIO_TOKEN
+    # variable names already used in Railway.
     twilio_sid: str = ""
     twilio_token: str = ""
+
+    # Twilio's own WhatsApp-enabled sender number (the sandbox number
+    # while testing, e.g. +14155238886, or your approved WhatsApp
+    # Business sender) - with or without a leading "whatsapp:" prefix,
+    # either is accepted. wa_from is preferred if set (this Railway
+    # project already had it holding the real sandbox WhatsApp number);
+    # twilio_phone is a fallback for a plain Twilio number that isn't
+    # actually WhatsApp-enabled, so don't rely on it alone.
+    wa_from: str = ""
     twilio_phone: str = ""
 
     # The recipient's own WhatsApp number (your phone), in E.164

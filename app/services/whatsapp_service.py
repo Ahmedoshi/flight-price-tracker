@@ -7,10 +7,16 @@ optional (this whole feature is a no-op until every one is set):
 
     TWILIO_SID     - Account SID from the Twilio Console
     TWILIO_TOKEN   - Auth Token from the Twilio Console
-    TWILIO_PHONE   - Twilio's WhatsApp-enabled sender number
+    WA_FROM        - Twilio's WhatsApp-enabled sender number (preferred)
+    TWILIO_PHONE   - fallback sender number if WA_FROM isn't set
     WHATSAPP_TO    - your own WhatsApp number, to receive alerts
 
-If you're using the Sandbox, TWILIO_PHONE is the shared sandbox number
+WA_FROM is checked first because it's the one that's actually
+WhatsApp-enabled in this project's Twilio account (the Sandbox number,
+whatsapp:+14155238886). TWILIO_PHONE may be a plain Twilio number that
+isn't WhatsApp-capable at all, so it's only used as a fallback.
+
+If you're using the Sandbox, the sender is the shared sandbox number
 shown on that page, and your own WHATSAPP_TO number must first send
 the sandbox's "join <code>" message on WhatsApp before Twilio will
 deliver anything to it - this only needs to be done once, but expires
@@ -25,12 +31,17 @@ from twilio.rest import Client
 from app.config.settings import settings
 
 
+def _from_number() -> str:
+
+    return settings.wa_from or settings.twilio_phone
+
+
 def _is_configured() -> bool:
 
     return bool(
         settings.twilio_sid
         and settings.twilio_token
-        and settings.twilio_phone
+        and _from_number()
         and settings.whatsapp_to
     )
 
@@ -55,7 +66,7 @@ def _send_sync(text: str) -> bool:
         client = Client(settings.twilio_sid, settings.twilio_token)
 
         client.messages.create(
-            from_=_as_whatsapp_number(settings.twilio_phone),
+            from_=_as_whatsapp_number(_from_number()),
             to=_as_whatsapp_number(settings.whatsapp_to),
             body=text,
         )

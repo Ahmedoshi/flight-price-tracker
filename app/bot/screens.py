@@ -66,7 +66,7 @@ def status_screen():
     whatsapp_ready = bool(
         settings.twilio_sid
         and settings.twilio_token
-        and settings.twilio_phone
+        and (settings.wa_from or settings.twilio_phone)
         and settings.whatsapp_to
     )
     whatsapp_icon = "🟢" if whatsapp_ready else "⚪"
