@@ -30,16 +30,26 @@ async def hourly_check(application):
     for flight in flights:
 
         try:
-            result = await service.cheapest_flight(
-                origin=flight.origin,
-                destination=flight.destination,
-                departure_date=flight.departure_date,
-                return_date=flight.return_date,
-                date_flex_days=flight.date_flex_days,
-                trip_type=flight.trip_type,
-                cabin_class=flight.cabin_class,
-                max_stops=flight.max_stops,
-            )
+            if flight.trip_type == "multi-city" and flight.legs:
+
+                result = await service.cheapest_multi_city(
+                    legs=flight.legs,
+                    cabin_class=flight.cabin_class,
+                    max_stops=flight.max_stops,
+                )
+
+            else:
+
+                result = await service.cheapest_flight(
+                    origin=flight.origin,
+                    destination=flight.destination,
+                    departure_date=flight.departure_date,
+                    return_date=flight.return_date,
+                    date_flex_days=flight.date_flex_days,
+                    trip_type=flight.trip_type,
+                    cabin_class=flight.cabin_class,
+                    max_stops=flight.max_stops,
+                )
 
         except ValueError:
             # Bad/legacy data shouldn't stop the rest of the batch.

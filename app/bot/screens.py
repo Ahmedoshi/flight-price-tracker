@@ -109,6 +109,26 @@ def flights_screen():
 
     for position, flight in enumerate(flights, start=1):
 
+        if flight.trip_type == "multi-city" and flight.legs:
+
+            legs_text = "\n".join(
+                f"  {i}. {leg['origin']} ➜ {leg['destination']} ({leg['date']})"
+                for i, leg in enumerate(flight.legs, start=1)
+            )
+
+            filters_line = _filters_summary(flight)
+
+            text = (
+                f"✈️ Flight #{position} — 🌍 Multi-city\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{legs_text}\n\n"
+                f"🎯 Target : {flight.max_price:.0f} SAR"
+                f"{filters_line}"
+            )
+
+            cards.append((text, flight_card(flight.id)))
+            continue
+
         flex_text = (
             f" (+/-{flight.date_flex_days}d)" if flight.date_flex_days else ""
         )

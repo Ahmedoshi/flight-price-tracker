@@ -42,6 +42,30 @@ def _flex_prompt() -> str:
     )
 
 
+async def _resume_or_restart(update: Update, context: ContextTypes.DEFAULT_TYPE, key: str, entry_label: str):
+    """Guard against a lost mid-wizard state - e.g. the bot process
+    restarted between steps and, for whatever reason, persistence
+    didn't have this in-flight conversation saved yet. Without this,
+    a stale button press would silently fall through to the generic
+    menu handler and look like the bot "hung". Returns the wizard's
+    data dict, or None after telling the user what happened.
+    """
+
+    data = context.user_data.get(key)
+
+    if data is None:
+
+        message = update.callback_query.message if update.callback_query else update.message
+
+        await message.reply_text(
+            "⚠️ This wizard's progress was lost (the bot likely restarted "
+            f"mid-conversation). Please start again with {entry_label}.",
+            reply_markup=main_menu(),
+        )
+
+    return data
+
+
 def _apply_filter_toggle(callback_data: str, data: dict):
 
     if callback_data == "af_trip":
@@ -72,7 +96,10 @@ def _apply_filter_toggle(callback_data: str, data: dict):
     ADD_RETURN,
     ADD_FLEX,
     ADD_TARGET,
-) = range(7)
+    ADD_MULTI_COUNT,
+    ADD_MULTI_LEG_DATE,
+    ADD_MULTI_LEG,
+) = range(10)
 
 
 async def add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -145,9 +172,22 @@ async def add_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    data = context.user_data["add"]
+    data = await _resume_or_restart(update, context, "add", "➕ Add Flight")
+
+    if data is None:
+        return ConversationHandler.END
 
     if query.data == "af_continue":
+
+        if data["trip_type"] == "multi-city":
+
+            await query.message.reply_text(
+                "🌍 Multi-city trip\n\n"
+                f"How many flights/cities in total, including "
+                f"{data['origin'][0]} → {data['destination'][0]}? "
+                f"({MULTI_CITY_MIN_LEGS}-{MULTI_CITY_MAX_LEGS})"
+            )
+            return ADD_MULTI_COUNT
 
         await query.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
         return ADD_DEPARTURE
@@ -161,6 +201,106 @@ async def add_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     return ADD_FILTERS
+
+
+async def add_multi_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+
+    try:
+        total = int(text)
+
+    except ValueError:
+
+        await update.message.reply_text(
+            f"❌ Send a whole number between {MULTI_CITY_MIN_LEGS} and {MULTI_CITY_MAX_LEGS}."
+        )
+        return ADD_MULTI_COUNT
+
+    if not (MULTI_CITY_MIN_LEGS <= total <= MULTI_CITY_MAX_LEGS):
+
+        await update.message.reply_text(
+            f"❌ Must be between {MULTI_CITY_MIN_LEGS} and {MULTI_CITY_MAX_LEGS}."
+        )
+        return ADD_MULTI_COUNT
+
+    data = context.user_data["add"]
+    data["multi_total"] = total
+    data["legs"] = [
+        {"origin": data["origin"][0], "destination": data["destination"][0]}
+    ]
+
+    await update.message.reply_text(
+        f"Leg 1 of {total}: {data['legs'][0]['origin']} → {data['legs'][0]['destination']}\n\n"
+        "Send its date (YYYY-MM-DD)."
+    )
+
+    return ADD_MULTI_LEG_DATE
+
+
+async def add_multi_leg_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+
+    if not is_valid_date(text):
+
+        await update.message.reply_text(
+            "❌ Please send a valid date as YYYY-MM-DD."
+        )
+        return ADD_MULTI_LEG_DATE
+
+    data = context.user_data["add"]
+    data["legs"][0]["date"] = text
+
+    await update.message.reply_text(
+        f"Leg 2 of {data['multi_total']}: send ORIGIN DESTINATION DATE\n"
+        "(e.g. LIS CDG 2026-09-05)."
+    )
+
+    return ADD_MULTI_LEG
+
+
+async def add_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    parts = update.message.text.strip().split()
+    data = context.user_data["add"]
+
+    if len(parts) != 3:
+
+        await update.message.reply_text(
+            "❌ Send exactly 3 values: ORIGIN DESTINATION DATE "
+            "(e.g. LIS CDG 2026-09-05)."
+        )
+        return ADD_MULTI_LEG
+
+    origin, destination, date_text = (p.upper() if i < 2 else p for i, p in enumerate(parts))
+
+    code_error = validate_codes([origin]) or validate_codes([destination])
+
+    if code_error:
+        await update.message.reply_text(f"❌ {code_error}")
+        return ADD_MULTI_LEG
+
+    if not is_valid_date(date_text):
+        await update.message.reply_text("❌ Please send a valid date as YYYY-MM-DD.")
+        return ADD_MULTI_LEG
+
+    data["legs"].append({"origin": origin, "destination": destination, "date": date_text})
+
+    if len(data["legs"]) < data["multi_total"]:
+
+        next_n = len(data["legs"]) + 1
+
+        await update.message.reply_text(
+            f"Leg {next_n} of {data['multi_total']}: send ORIGIN DESTINATION DATE."
+        )
+        return ADD_MULTI_LEG
+
+    await update.message.reply_text(
+        "Send your TARGET price in SAR (numbers only, e.g. 1800)."
+    )
+
+    return ADD_TARGET
 
 
 async def add_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,6 +388,39 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = context.user_data.pop("add")
 
+    if data["trip_type"] == "multi-city":
+
+        legs = data["legs"]
+
+        tracking.add(
+            origin=legs[0]["origin"],
+            destination=legs[-1]["destination"],
+            departure_date=legs[0]["date"],
+            return_date="",
+            max_price=max_price,
+            date_flex_days=0,
+            trip_type="multi-city",
+            cabin_class=data["cabin_class"],
+            max_stops=data["max_stops"],
+            legs=legs,
+        )
+
+        legs_text = "\n".join(
+            f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+            for i, leg in enumerate(legs, start=1)
+        )
+
+        await update.message.reply_text(
+            text=(
+                "✅ Flight Added (multi-city)\n\n"
+                f"{legs_text}\n\n"
+                f"🎯 Target : {max_price:.0f} SAR"
+            ),
+            reply_markup=main_menu(),
+        )
+
+        return ConversationHandler.END
+
     tracking.add(
         origin=",".join(data["origin"]),
         destination=",".join(data["destination"]),
@@ -301,7 +474,10 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     CHECK_DEPARTURE,
     CHECK_RETURN,
     CHECK_FLEX,
-) = range(7, 13)
+    CHECK_MULTI_COUNT,
+    CHECK_MULTI_LEG_DATE,
+    CHECK_MULTI_LEG,
+) = range(10, 19)
 
 
 async def check_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -374,9 +550,22 @@ async def check_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    data = context.user_data["check"]
+    data = await _resume_or_restart(update, context, "check", "🔍 Check Flight")
+
+    if data is None:
+        return ConversationHandler.END
 
     if query.data == "af_continue":
+
+        if data["trip_type"] == "multi-city":
+
+            await query.message.reply_text(
+                "🌍 Multi-city trip\n\n"
+                f"How many flights/cities in total, including "
+                f"{data['origin'][0]} → {data['destination'][0]}? "
+                f"({MULTI_CITY_MIN_LEGS}-{MULTI_CITY_MAX_LEGS})"
+            )
+            return CHECK_MULTI_COUNT
 
         await query.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
         return CHECK_DEPARTURE
@@ -390,6 +579,150 @@ async def check_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     return CHECK_FILTERS
+
+
+async def check_multi_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+
+    try:
+        total = int(text)
+
+    except ValueError:
+
+        await update.message.reply_text(
+            f"❌ Send a whole number between {MULTI_CITY_MIN_LEGS} and {MULTI_CITY_MAX_LEGS}."
+        )
+        return CHECK_MULTI_COUNT
+
+    if not (MULTI_CITY_MIN_LEGS <= total <= MULTI_CITY_MAX_LEGS):
+
+        await update.message.reply_text(
+            f"❌ Must be between {MULTI_CITY_MIN_LEGS} and {MULTI_CITY_MAX_LEGS}."
+        )
+        return CHECK_MULTI_COUNT
+
+    data = context.user_data["check"]
+    data["multi_total"] = total
+    data["legs"] = [
+        {"origin": data["origin"][0], "destination": data["destination"][0]}
+    ]
+
+    await update.message.reply_text(
+        f"Leg 1 of {total}: {data['legs'][0]['origin']} → {data['legs'][0]['destination']}\n\n"
+        "Send its date (YYYY-MM-DD)."
+    )
+
+    return CHECK_MULTI_LEG_DATE
+
+
+async def check_multi_leg_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+
+    if not is_valid_date(text):
+
+        await update.message.reply_text(
+            "❌ Please send a valid date as YYYY-MM-DD."
+        )
+        return CHECK_MULTI_LEG_DATE
+
+    data = context.user_data["check"]
+    data["legs"][0]["date"] = text
+
+    await update.message.reply_text(
+        f"Leg 2 of {data['multi_total']}: send ORIGIN DESTINATION DATE\n"
+        "(e.g. LIS CDG 2026-09-05)."
+    )
+
+    return CHECK_MULTI_LEG
+
+
+async def check_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    parts = update.message.text.strip().split()
+    data = context.user_data["check"]
+
+    if len(parts) != 3:
+
+        await update.message.reply_text(
+            "❌ Send exactly 3 values: ORIGIN DESTINATION DATE "
+            "(e.g. LIS CDG 2026-09-05)."
+        )
+        return CHECK_MULTI_LEG
+
+    origin, destination, date_text = (p.upper() if i < 2 else p for i, p in enumerate(parts))
+
+    code_error = validate_codes([origin]) or validate_codes([destination])
+
+    if code_error:
+        await update.message.reply_text(f"❌ {code_error}")
+        return CHECK_MULTI_LEG
+
+    if not is_valid_date(date_text):
+        await update.message.reply_text("❌ Please send a valid date as YYYY-MM-DD.")
+        return CHECK_MULTI_LEG
+
+    data["legs"].append({"origin": origin, "destination": destination, "date": date_text})
+
+    if len(data["legs"]) < data["multi_total"]:
+
+        next_n = len(data["legs"]) + 1
+
+        await update.message.reply_text(
+            f"Leg {next_n} of {data['multi_total']}: send ORIGIN DESTINATION DATE."
+        )
+        return CHECK_MULTI_LEG
+
+    data = context.user_data.pop("check")
+
+    legs_text = "\n".join(
+        f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+        for i, leg in enumerate(data["legs"], start=1)
+    )
+
+    await update.message.reply_text(f"🔍 Searching multi-city itinerary...\n\n{legs_text}")
+
+    service = FlightService()
+
+    try:
+        result = await service.cheapest_multi_city(
+            legs=data["legs"],
+            cabin_class=data["cabin_class"],
+            max_stops=data["max_stops"],
+        )
+
+    except ValueError as exc:
+
+        await update.message.reply_text(f"❌ {exc}", reply_markup=main_menu())
+        return ConversationHandler.END
+
+    if result is None:
+
+        await update.message.reply_text(
+            "❌ No flights found for this itinerary (multi-city is currently "
+            "only searched via Google Flights).",
+            reply_markup=main_menu(),
+        )
+        return ConversationHandler.END
+
+    text = (
+        "✈️ Cheapest Multi-city Itinerary\n\n"
+        f"🏢 Provider : {result.provider}\n\n"
+        f"✈ Airline : {result.airline}\n\n"
+        f"💰 Price : {result.price:.0f} {result.currency}\n\n"
+        f"{legs_text}"
+    )
+
+    if result.booking_url:
+        text += f"\n\n🔗 {result.booking_url}"
+
+    await update.message.reply_text(
+        text=text,
+        reply_markup=main_menu(),
+    )
+
+    return ConversationHandler.END
 
 
 async def check_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -535,7 +868,10 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
     EDIT_RETURN,
     EDIT_FLEX,
     EDIT_TARGET,
-) = range(13, 20)
+    EDIT_MULTI_COUNT,
+    EDIT_MULTI_LEG_DATE,
+    EDIT_MULTI_LEG,
+) = range(19, 29)
 
 
 async def edit_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -565,6 +901,8 @@ async def edit_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "trip_type": flight.trip_type,
         "cabin_class": flight.cabin_class,
         "max_stops": flight.max_stops,
+        "legs": flight.legs,
+        "multi_total": len(flight.legs) if flight.legs else None,
     }
 
     await query.message.reply_text(
@@ -640,9 +978,30 @@ async def edit_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    data = context.user_data["edit"]
+    data = await _resume_or_restart(update, context, "edit", "✏️ Edit on a flight card")
+
+    if data is None:
+        return ConversationHandler.END
 
     if query.data == "af_continue":
+
+        if data["trip_type"] == "multi-city":
+
+            existing_note = (
+                "\n\n(This re-enters the full itinerary - it replaces the "
+                "current legs.)"
+                if data.get("legs")
+                else ""
+            )
+
+            await query.message.reply_text(
+                "🌍 Multi-city trip\n\n"
+                f"How many flights/cities in total, including "
+                f"{data['origin'][0]} → {data['destination'][0]}? "
+                f"({MULTI_CITY_MIN_LEGS}-{MULTI_CITY_MAX_LEGS})"
+                f"{existing_note}"
+            )
+            return EDIT_MULTI_COUNT
 
         await query.message.reply_text(
             f"Current departure: {data['departure_date']}\n\n"
@@ -659,6 +1018,107 @@ async def edit_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     return EDIT_FILTERS
+
+
+async def edit_multi_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+
+    try:
+        total = int(text)
+
+    except ValueError:
+
+        await update.message.reply_text(
+            f"❌ Send a whole number between {MULTI_CITY_MIN_LEGS} and {MULTI_CITY_MAX_LEGS}."
+        )
+        return EDIT_MULTI_COUNT
+
+    if not (MULTI_CITY_MIN_LEGS <= total <= MULTI_CITY_MAX_LEGS):
+
+        await update.message.reply_text(
+            f"❌ Must be between {MULTI_CITY_MIN_LEGS} and {MULTI_CITY_MAX_LEGS}."
+        )
+        return EDIT_MULTI_COUNT
+
+    data = context.user_data["edit"]
+    data["multi_total"] = total
+    data["legs"] = [
+        {"origin": data["origin"][0], "destination": data["destination"][0]}
+    ]
+
+    await update.message.reply_text(
+        f"Leg 1 of {total}: {data['legs'][0]['origin']} → {data['legs'][0]['destination']}\n\n"
+        "Send its date (YYYY-MM-DD)."
+    )
+
+    return EDIT_MULTI_LEG_DATE
+
+
+async def edit_multi_leg_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.strip()
+
+    if not is_valid_date(text):
+
+        await update.message.reply_text(
+            "❌ Please send a valid date as YYYY-MM-DD."
+        )
+        return EDIT_MULTI_LEG_DATE
+
+    data = context.user_data["edit"]
+    data["legs"][0]["date"] = text
+
+    await update.message.reply_text(
+        f"Leg 2 of {data['multi_total']}: send ORIGIN DESTINATION DATE\n"
+        "(e.g. LIS CDG 2026-09-05)."
+    )
+
+    return EDIT_MULTI_LEG
+
+
+async def edit_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    parts = update.message.text.strip().split()
+    data = context.user_data["edit"]
+
+    if len(parts) != 3:
+
+        await update.message.reply_text(
+            "❌ Send exactly 3 values: ORIGIN DESTINATION DATE "
+            "(e.g. LIS CDG 2026-09-05)."
+        )
+        return EDIT_MULTI_LEG
+
+    origin, destination, date_text = (p.upper() if i < 2 else p for i, p in enumerate(parts))
+
+    code_error = validate_codes([origin]) or validate_codes([destination])
+
+    if code_error:
+        await update.message.reply_text(f"❌ {code_error}")
+        return EDIT_MULTI_LEG
+
+    if not is_valid_date(date_text):
+        await update.message.reply_text("❌ Please send a valid date as YYYY-MM-DD.")
+        return EDIT_MULTI_LEG
+
+    data["legs"].append({"origin": origin, "destination": destination, "date": date_text})
+
+    if len(data["legs"]) < data["multi_total"]:
+
+        next_n = len(data["legs"]) + 1
+
+        await update.message.reply_text(
+            f"Leg {next_n} of {data['multi_total']}: send ORIGIN DESTINATION DATE."
+        )
+        return EDIT_MULTI_LEG
+
+    await update.message.reply_text(
+        f"Current target: {data['max_price']:.0f} SAR\n\n"
+        f"Send new TARGET price in SAR, or send \"{KEEP}\" to keep it."
+    )
+
+    return EDIT_TARGET
 
 
 async def edit_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -767,6 +1227,40 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Target price must be numeric.")
             return EDIT_TARGET
 
+    if data["trip_type"] == "multi-city":
+
+        legs = data["legs"]
+
+        tracking.update(
+            flight_id=data["id"],
+            origin=legs[0]["origin"],
+            destination=legs[-1]["destination"],
+            departure_date=legs[0]["date"],
+            return_date="",
+            max_price=data["max_price"],
+            date_flex_days=0,
+            trip_type="multi-city",
+            cabin_class=data["cabin_class"],
+            max_stops=data["max_stops"],
+            legs=legs,
+        )
+
+        legs_text = "\n".join(
+            f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+            for i, leg in enumerate(legs, start=1)
+        )
+
+        await update.message.reply_text(
+            text=(
+                "✅ Flight Updated (multi-city)\n\n"
+                f"{legs_text}\n\n"
+                f"🎯 Target : {data['max_price']:.0f} SAR"
+            ),
+            reply_markup=main_menu(),
+        )
+
+        return ConversationHandler.END
+
     # Re-validate the final combination in case origin/destination/flex
     # changed independently earlier in the conversation.
     error = validate_search_scope(
@@ -850,9 +1344,13 @@ add_flight_conversation = ConversationHandler(
         ADD_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_return)],
         ADD_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_flex)],
         ADD_TARGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_target)],
+        ADD_MULTI_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_multi_count)],
+        ADD_MULTI_LEG_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_multi_leg_date)],
+        ADD_MULTI_LEG: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_multi_leg)],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
     name="add_flight_conversation",
+    persistent=True,
 )
 
 
@@ -867,9 +1365,13 @@ check_flight_conversation = ConversationHandler(
         CHECK_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_departure)],
         CHECK_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_return)],
         CHECK_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_flex)],
+        CHECK_MULTI_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_multi_count)],
+        CHECK_MULTI_LEG_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_multi_leg_date)],
+        CHECK_MULTI_LEG: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_multi_leg)],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
     name="check_flight_conversation",
+    persistent=True,
 )
 
 
@@ -885,7 +1387,11 @@ edit_flight_conversation = ConversationHandler(
         EDIT_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_return)],
         EDIT_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_flex)],
         EDIT_TARGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_target)],
+        EDIT_MULTI_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_multi_count)],
+        EDIT_MULTI_LEG_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_multi_leg_date)],
+        EDIT_MULTI_LEG: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_multi_leg)],
     },
     fallbacks=[CommandHandler("cancel", cancel)],
     name="edit_flight_conversation",
+    persistent=True,
 )

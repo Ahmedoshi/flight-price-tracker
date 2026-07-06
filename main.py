@@ -5,6 +5,7 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
+    PicklePersistence,
 )
 
 from app.config.settings import settings, PROJECT_ROOT
@@ -95,10 +96,21 @@ def main():
     print(" Telegram Bot Started")
     print("===================================")
 
+    # Without this, every Add/Check/Edit wizard's progress (and any
+    # in-flight Advanced Filters selection) lives only in memory - a
+    # Railway restart/redeploy mid-conversation wipes it, and the next
+    # button tap silently falls through to the generic menu handler
+    # instead of continuing the wizard. Persisting to disk means a
+    # restart resumes exactly where the user left off.
+    persistence_path = PROJECT_ROOT / "data" / "bot_persistence.pickle"
+    persistence_path.parent.mkdir(parents=True, exist_ok=True)
+    persistence = PicklePersistence(filepath=persistence_path)
+
     application = (
         Application.builder()
         .token(settings.bot_token)
         .post_init(post_init)
+        .persistence(persistence)
         .build()
     )
 

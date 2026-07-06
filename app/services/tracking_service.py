@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.database.database import (
     add_flight,
     get_all_flights,

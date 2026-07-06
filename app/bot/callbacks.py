@@ -216,18 +216,29 @@ async def button_click(
             await query.message.reply_text("🔍 Searching...")
 
             service = FlightService()
+            is_multi_city = flight.trip_type == "multi-city" and flight.legs
 
             try:
-                result = await service.cheapest_flight(
-                    origin=flight.origin,
-                    destination=flight.destination,
-                    departure_date=flight.departure_date,
-                    return_date=flight.return_date,
-                    date_flex_days=flight.date_flex_days,
-                    trip_type=flight.trip_type,
-                    cabin_class=flight.cabin_class,
-                    max_stops=flight.max_stops,
-                )
+                if is_multi_city:
+
+                    result = await service.cheapest_multi_city(
+                        legs=flight.legs,
+                        cabin_class=flight.cabin_class,
+                        max_stops=flight.max_stops,
+                    )
+
+                else:
+
+                    result = await service.cheapest_flight(
+                        origin=flight.origin,
+                        destination=flight.destination,
+                        departure_date=flight.departure_date,
+                        return_date=flight.return_date,
+                        date_flex_days=flight.date_flex_days,
+                        trip_type=flight.trip_type,
+                        cabin_class=flight.cabin_class,
+                        max_stops=flight.max_stops,
+                    )
 
             except ValueError as exc:
 
@@ -241,6 +252,29 @@ async def button_click(
 
                 await query.message.reply_text(
                     "❌ No flights found.",
+                    reply_markup=main_menu(),
+                )
+
+            elif is_multi_city:
+
+                legs_text = "\n".join(
+                    f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+                    for i, leg in enumerate(flight.legs, start=1)
+                )
+
+                text = (
+                    "✈️ Cheapest Multi-city Itinerary\n\n"
+                    f"🏢 Provider : {result.provider}\n\n"
+                    f"✈ Airline : {result.airline}\n\n"
+                    f"💰 Price : {result.price:.0f} {result.currency}\n\n"
+                    f"{legs_text}"
+                )
+
+                if result.booking_url:
+                    text += f"\n\n🔗 {result.booking_url}"
+
+                await query.message.reply_text(
+                    text=text,
                     reply_markup=main_menu(),
                 )
 
