@@ -8,30 +8,26 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot.keyboards import main_menu
+from app.bot.keyboards import filters_keyboard, main_menu
 from app.services.analytics_service import AnalyticsService
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
 from app.utils.airports import parse_codes, validate_codes
 from app.utils.dates import is_valid_date
-from app.utils.flight_filters import (
-    DEFAULT_FILTERS,
-    format_filters,
-    parse_filter_tokens,
-)
+from app.utils.flight_filters import DEFAULT_FILTERS, format_filters
 from app.utils.search_scope import validate_search_scope
 
 tracking = TrackingService()
 
 KEEP = "-"
 
-FILTERS_PROMPT = (
-    "Advanced filters (all optional).\n"
-    "Send any of, space-separated: trip=oneway|round, "
-    "cabin=economy|premium-economy|business|first, stops=N "
-    "(0 = direct only).\n\n"
-    f"Send \"{KEEP}\" to skip / use defaults (round-trip, economy, any stops)."
+FILTERS_SCREEN_TEXT = (
+    "🎛 Advanced Filters\n\n"
+    "Tap a button to cycle its value, then Continue."
 )
+
+CABIN_ORDER = ["economy", "premium-economy", "business", "first"]
+STOPS_ORDER = [None, 0, 1, 2]
 
 
 def _flex_prompt() -> str:
@@ -40,6 +36,25 @@ def _flex_prompt() -> str:
         "How many days flexible (0-5)? 0 = exact dates only.\n\n"
         "e.g. \"3\" checks +/-3 days around your dates too."
     )
+
+
+def _apply_filter_toggle(callback_data: str, data: dict):
+
+    if callback_data == "af_trip":
+
+        data["trip_type"] = (
+            "one-way" if data["trip_type"] == "round-trip" else "round-trip"
+        )
+
+    elif callback_data == "af_cabin":
+
+        idx = CABIN_ORDER.index(data["cabin_class"])
+        data["cabin_class"] = CABIN_ORDER[(idx + 1) % len(CABIN_ORDER)]
+
+    elif callback_data == "af_stops":
+
+        idx = STOPS_ORDER.index(data["max_stops"])
+        data["max_stops"] = STOPS_ORDER[(idx + 1) % len(STOPS_ORDER)]
 
 
 # ==============================
@@ -110,30 +125,39 @@ async def add_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["add"]["destination"] = codes
 
-    await update.message.reply_text(FILTERS_PROMPT)
+    data = context.user_data["add"]
+
+    await update.message.reply_text(
+        FILTERS_SCREEN_TEXT,
+        reply_markup=filters_keyboard(
+            data["trip_type"], data["cabin_class"], data["max_stops"]
+        ),
+    )
 
     return ADD_FILTERS
 
 
 async def add_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
+    query = update.callback_query
+    await query.answer()
+
     data = context.user_data["add"]
 
-    if text != KEEP:
+    if query.data == "af_continue":
 
-        tokens = text.split()
-        parsed, error = parse_filter_tokens(tokens)
+        await query.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
+        return ADD_DEPARTURE
 
-        if error:
-            await update.message.reply_text(f"❌ {error}")
-            return ADD_FILTERS
+    _apply_filter_toggle(query.data, data)
 
-        data.update(parsed)
+    await query.edit_message_reply_markup(
+        reply_markup=filters_keyboard(
+            data["trip_type"], data["cabin_class"], data["max_stops"]
+        )
+    )
 
-    await update.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
-
-    return ADD_DEPARTURE
+    return ADD_FILTERS
 
 
 async def add_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -330,30 +354,39 @@ async def check_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["check"]["destination"] = codes
 
-    await update.message.reply_text(FILTERS_PROMPT)
+    data = context.user_data["check"]
+
+    await update.message.reply_text(
+        FILTERS_SCREEN_TEXT,
+        reply_markup=filters_keyboard(
+            data["trip_type"], data["cabin_class"], data["max_stops"]
+        ),
+    )
 
     return CHECK_FILTERS
 
 
 async def check_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
+    query = update.callback_query
+    await query.answer()
+
     data = context.user_data["check"]
 
-    if text != KEEP:
+    if query.data == "af_continue":
 
-        tokens = text.split()
-        parsed, error = parse_filter_tokens(tokens)
+        await query.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
+        return CHECK_DEPARTURE
 
-        if error:
-            await update.message.reply_text(f"❌ {error}")
-            return CHECK_FILTERS
+    _apply_filter_toggle(query.data, data)
 
-        data.update(parsed)
+    await query.edit_message_reply_markup(
+        reply_markup=filters_keyboard(
+            data["trip_type"], data["cabin_class"], data["max_stops"]
+        )
+    )
 
-    await update.message.reply_text("Send the DEPARTURE date (YYYY-MM-DD).")
-
-    return CHECK_DEPARTURE
+    return CHECK_FILTERS
 
 
 async def check_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -589,11 +622,11 @@ async def edit_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         data["destination"] = codes
 
-    current = format_filters(data["trip_type"], data["cabin_class"], data["max_stops"])
-
     await update.message.reply_text(
-        f"Current filters: {current or 'round-trip, economy, any stops'}\n\n"
-        f"{FILTERS_PROMPT}"
+        FILTERS_SCREEN_TEXT,
+        reply_markup=filters_keyboard(
+            data["trip_type"], data["cabin_class"], data["max_stops"]
+        ),
     )
 
     return EDIT_FILTERS
@@ -601,26 +634,28 @@ async def edit_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def edit_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    text = update.message.text.strip()
+    query = update.callback_query
+    await query.answer()
+
     data = context.user_data["edit"]
 
-    if text != KEEP:
+    if query.data == "af_continue":
 
-        tokens = text.split()
-        parsed, error = parse_filter_tokens(tokens)
+        await query.message.reply_text(
+            f"Current departure: {data['departure_date']}\n\n"
+            f"Send new DEPARTURE date (YYYY-MM-DD), or send \"{KEEP}\" to keep it."
+        )
+        return EDIT_DEPARTURE
 
-        if error:
-            await update.message.reply_text(f"❌ {error}")
-            return EDIT_FILTERS
+    _apply_filter_toggle(query.data, data)
 
-        data.update(parsed)
-
-    await update.message.reply_text(
-        f"Current departure: {data['departure_date']}\n\n"
-        f"Send new DEPARTURE date (YYYY-MM-DD), or send \"{KEEP}\" to keep it."
+    await query.edit_message_reply_markup(
+        reply_markup=filters_keyboard(
+            data["trip_type"], data["cabin_class"], data["max_stops"]
+        )
     )
 
-    return EDIT_DEPARTURE
+    return EDIT_FILTERS
 
 
 async def edit_departure(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -807,7 +842,7 @@ add_flight_conversation = ConversationHandler(
     states={
         ADD_ORIGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_origin)],
         ADD_DESTINATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_destination)],
-        ADD_FILTERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_filters)],
+        ADD_FILTERS: [CallbackQueryHandler(add_filters, pattern="^af_")],
         ADD_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_departure)],
         ADD_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_return)],
         ADD_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_flex)],
@@ -825,7 +860,7 @@ check_flight_conversation = ConversationHandler(
     states={
         CHECK_ORIGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_origin)],
         CHECK_DESTINATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_destination)],
-        CHECK_FILTERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_filters)],
+        CHECK_FILTERS: [CallbackQueryHandler(check_filters, pattern="^af_")],
         CHECK_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_departure)],
         CHECK_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_return)],
         CHECK_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_flex)],
@@ -842,7 +877,7 @@ edit_flight_conversation = ConversationHandler(
     states={
         EDIT_ORIGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_origin)],
         EDIT_DESTINATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_destination)],
-        EDIT_FILTERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_filters)],
+        EDIT_FILTERS: [CallbackQueryHandler(edit_filters, pattern="^af_")],
         EDIT_DEPARTURE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_departure)],
         EDIT_RETURN: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_return)],
         EDIT_FLEX: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_flex)],

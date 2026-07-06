@@ -2,6 +2,32 @@ from telegram import InlineKeyboardButton
 from telegram import InlineKeyboardMarkup
 
 
+def filters_keyboard(trip_type: str, cabin_class: str, max_stops: int | None):
+    """Tap-to-cycle buttons for the Add/Check/Edit wizards' advanced
+    filters step. Each button's label always shows the current value,
+    so there's nothing to type or get wrong - just tap until it shows
+    what you want, then Continue."""
+
+    trip_label = "🔁 Round-trip" if trip_type == "round-trip" else "➡️ One-way"
+    cabin_label = f"💺 {cabin_class.replace('-', ' ').title()}"
+
+    if max_stops is None:
+        stops_label = "🛑 Stops: Any"
+    elif max_stops == 0:
+        stops_label = "🛑 Stops: Direct only"
+    else:
+        stops_label = f"🛑 Stops: Max {max_stops}"
+
+    keyboard = [
+        [InlineKeyboardButton(trip_label, callback_data="af_trip")],
+        [InlineKeyboardButton(cabin_label, callback_data="af_cabin")],
+        [InlineKeyboardButton(stops_label, callback_data="af_stops")],
+        [InlineKeyboardButton("✅ Continue", callback_data="af_continue")],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
 def main_menu():
 
     keyboard = [
