@@ -30,6 +30,16 @@ async def hourly_check(application):
 
     for flight in flights:
 
+        # Look up history BEFORE this check's price is searched/saved,
+        # so the "lowest this month" and "rebound" rules compare
+        # against the prior baseline rather than including the very
+        # price they're about to evaluate.
+        monthly_stats = analytics.compute_stats(flight, since_days=30)
+        monthly_low_price = monthly_stats.min_price if monthly_stats is not None else None
+
+        recent_prices = tracking.recent_prices(flight, limit=2)
+        price_before_last = recent_prices[1] if len(recent_prices) > 1 else None
+
         try:
             if flight.trip_type == "multi-city" and flight.legs:
 
@@ -63,7 +73,14 @@ async def hourly_check(application):
         stats = analytics.compute_stats(flight, since_days=settings.analytics_window_days)
         route_avg_price = stats.avg_price if stats is not None else None
 
-        decision = evaluate_alert(flight, result.price, now, route_avg_price=route_avg_price)
+        decision = evaluate_alert(
+            flight,
+            result.price,
+            now,
+            route_avg_price=route_avg_price,
+            monthly_low_price=monthly_low_price,
+            price_before_last=price_before_last,
+        )
 
         tracking.update_tracking(
             flight_id=flight.id,
@@ -83,6 +100,10 @@ async def hourly_check(application):
             header = "⚡ FLASH DEAL ⚡"
         elif decision.escalate:
             header = "🚨 EXCEPTIONAL FARE ALERT 🚨"
+        elif decision.is_rebound:
+            header = "↩️ Price Rebound"
+        elif decision.is_monthly_low:
+            header = "📅 Lowest This Month"
         else:
             header = "🔥 Price Alert"
 

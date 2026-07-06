@@ -271,6 +271,44 @@ def get_last_price(flight):
     return None
 
 
+def get_recent_prices(flight, limit: int = 3) -> list[float]:
+    """Most recently recorded prices for this flight's exact route,
+    most-recent-first. Used by the "price returned after increasing"
+    (rebound) alert rule, which needs to look one step further back
+    than flight.last_price alone can provide.
+
+    Must be called before the current check's price is saved to
+    price_history (i.e. before TrackingService.save_result()), or the
+    price being evaluated would contaminate its own history.
+    """
+
+    conn = get_connection()
+
+    rows = conn.execute(
+        """
+        SELECT price
+        FROM price_history
+        WHERE origin=?
+          AND destination=?
+          AND departure_date=?
+          AND return_date=?
+        ORDER BY checked_at DESC
+        LIMIT ?
+        """,
+        (
+            flight.origin,
+            flight.destination,
+            flight.departure_date,
+            flight.return_date,
+            limit,
+        ),
+    ).fetchall()
+
+    conn.close()
+
+    return [row[0] for row in rows]
+
+
 def get_price_history(limit: int = 20):
 
     conn = get_connection()

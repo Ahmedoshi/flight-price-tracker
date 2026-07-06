@@ -7,6 +7,7 @@ from app.database.database import (
     save_price,
     get_last_price,
     get_price_history,
+    get_recent_prices,
     get_route_price_history,
     update_flight,
     update_flight_tracking,
@@ -136,6 +137,13 @@ class TrackingService:
     def last_price(self, flight: Flight):
 
         return get_last_price(flight)
+
+    def recent_prices(self, flight: Flight, limit: int = 3) -> list[float]:
+        """Most-recent-first prices for the rebound alert rule. Call
+        before save_result() for the current check - see
+        get_recent_prices()'s docstring."""
+
+        return get_recent_prices(flight, limit=limit)
 
     def save_result(self, result):
 

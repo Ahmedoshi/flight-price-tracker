@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     # and the buy-now recommendation.
     analytics_window_days: int = 45
 
+    # A "rebound" alert (price returned after increasing) needs both
+    # the prior rise and the current fall to be at least this % each,
+    # so a couple of dollars of noise doesn't count as a real reversal.
+    rebound_min_change_pct: float = 3.0
+
     # --- Provider reliability (Roadmap Phase 1) ---
 
     # Per-attempt timeout for a single provider's search() call. A slow
