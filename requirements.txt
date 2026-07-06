@@ -23,6 +23,7 @@ python-telegram-bot==22.8
 requests==2.34.2
 selectolax==0.4.10
 SQLAlchemy==2.0.51
+twilio==9.10.9
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzlocal==5.4.4

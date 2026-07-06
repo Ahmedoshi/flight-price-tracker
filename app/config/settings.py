@@ -30,6 +30,24 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # --- WhatsApp notifications (via Twilio) ---
+    # twilio_sid/twilio_token/twilio_phone match the TWILIO_SID/
+    # TWILIO_TOKEN/TWILIO_PHONE variable names already used in
+    # Railway. twilio_phone is Twilio's own WhatsApp-enabled sender
+    # number (the sandbox number while testing, e.g. +14155238886, or
+    # your approved WhatsApp Business sender) - with or without a
+    # leading "whatsapp:" prefix, either is accepted.
+    twilio_sid: str = ""
+    twilio_token: str = ""
+    twilio_phone: str = ""
+
+    # The recipient's own WhatsApp number (your phone), in E.164
+    # format e.g. +9665XXXXXXXX, with or without a "whatsapp:" prefix.
+    # If using the Twilio Sandbox, this number must have already sent
+    # the sandbox's "join <code>" message before it can receive
+    # anything - see https://www.twilio.com/docs/whatsapp/sandbox.
+    whatsapp_to: str = ""
+
     # --- Notification rule engine (Sprint 2 / Phase 1) ---
 
     # Alert if the price dropped by at least this % since the last check.

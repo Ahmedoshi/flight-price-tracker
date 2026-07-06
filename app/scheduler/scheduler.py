@@ -9,6 +9,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.flight_service import FlightService
 from app.services.notification_rules import evaluate_alert
 from app.services.tracking_service import TrackingService
+from app.services.whatsapp_service import send_whatsapp
 
 
 scheduler = AsyncIOScheduler(timezone=settings.timezone)
@@ -107,6 +108,12 @@ async def hourly_check(application):
             chat_id=settings.chat_id,
             text=text,
         )
+
+        # Best-effort second channel - a WhatsApp delivery problem
+        # should never stop the Telegram alert above or crash the
+        # scheduler, so failures here are swallowed (send_whatsapp
+        # already catches and logs internally).
+        await send_whatsapp(text)
 
 
 JOB_ID = "hourly-flight-check"

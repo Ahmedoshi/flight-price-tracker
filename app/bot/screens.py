@@ -63,12 +63,22 @@ def status_screen():
     flights = tracking.list()
     is_running, interval_hours = get_status()
 
+    whatsapp_ready = bool(
+        settings.twilio_sid
+        and settings.twilio_token
+        and settings.twilio_phone
+        and settings.whatsapp_to
+    )
+    whatsapp_icon = "🟢" if whatsapp_ready else "⚪"
+    whatsapp_label = "Ready" if whatsapp_ready else "Not configured"
+
     text = (
         "ℹ️ System Status\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "🟢 Bot : Online\n"
         "🟢 Database : Connected\n"
         f"{_provider_status_lines()}\n"
+        f"{whatsapp_icon} WhatsApp Alerts : {whatsapp_label}\n"
         f"{'🟢' if is_running else '⏸'} Scheduler : {'Running' if is_running else 'Paused'}\n\n"
         f"📍 Saved Flights : {len(flights)}"
     )
