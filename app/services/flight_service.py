@@ -32,6 +32,7 @@ class FlightService:
         trip_type: str = "round-trip",
         cabin_class: str = "economy",
         max_stops: int | None = None,
+        is_scheduled_check: bool = False,
     ) -> list[FlightResult]:
         """Search every origin/destination airport combination across
         the flexible date range, and return all results pooled from
@@ -41,6 +42,10 @@ class FlightService:
         comma-separated list (e.g. "RUH,DMM"). date_flex_days shifts
         the departure (and, for round-trips, return) date together by
         -N..+N days. return_date is ignored for one-way trips.
+
+        is_scheduled_check should be True only when called from the
+        hourly scheduler - it excludes providers with a request quota
+        too small for automatic checks (see ProviderManager.search).
         """
 
         origins = parse_codes(origin)
@@ -84,7 +89,7 @@ class FlightService:
                     max_stops=max_stops,
                 )
 
-                return await self.provider_manager.search(flight)
+                return await self.provider_manager.search(flight, is_scheduled_check)
 
         tasks = [
             _search_one(o, d, dep, ret)
@@ -171,6 +176,7 @@ class FlightService:
         trip_type: str = "round-trip",
         cabin_class: str = "economy",
         max_stops: int | None = None,
+        is_scheduled_check: bool = False,
     ) -> FlightResult | None:
 
         results = await self.check_flight(
@@ -182,6 +188,7 @@ class FlightService:
             trip_type,
             cabin_class,
             max_stops,
+            is_scheduled_check,
         )
 
         if not results:

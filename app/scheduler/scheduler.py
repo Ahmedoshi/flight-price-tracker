@@ -49,6 +49,7 @@ async def hourly_check(application):
                     trip_type=flight.trip_type,
                     cabin_class=flight.cabin_class,
                     max_stops=flight.max_stops,
+                    is_scheduled_check=True,
                 )
 
         except ValueError:

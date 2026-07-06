@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     amadeus_client_id: str = ""
     amadeus_client_secret: str = ""
     duffel_api_key: str = ""
+
+    # This is actually a RapidAPI key for the unofficial "Sky Scrapper"
+    # API (rapidapi.com/apiheya/api/sky-scrapper), not an official
+    # Skyscanner Partner API credential - Skyscanner has no self-serve
+    # signup. See app/providers/skyscanner_flights.py for setup notes
+    # and an important caveat about its very small free-tier quota.
     skyscanner_api_key: str = ""
 
     timezone: str = "Asia/Riyadh"

@@ -12,3 +12,4 @@ class FlightResult:
     departure_date: str
     return_date: str
     booking_url: str = ""
+    stops: int | None = None  # None = unknown (provider didn't report it)

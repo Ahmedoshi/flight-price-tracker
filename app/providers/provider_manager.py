@@ -36,7 +36,22 @@ class ProviderManager:
             if is_enabled()
         ]
 
-    async def search(self, flight: Flight) -> list[FlightResult]:
+    async def search(self, flight: Flight, is_scheduled_check: bool = False) -> list[FlightResult]:
+        """Search every enabled provider for this flight.
+
+        is_scheduled_check=True is used by the hourly scheduler; it
+        skips any provider with ALLOWED_IN_SCHEDULED_CHECKS=False
+        (e.g. Skyscanner's Sky Scrapper, whose free tier is only 20
+        requests/month - nowhere near enough for hourly automatic
+        checks). Manual searches (/check, the wizards, "Check Now")
+        leave this at the default False, so those providers still get
+        used when a person deliberately asks for a check.
+        """
+
+        providers = self.providers
+
+        if is_scheduled_check:
+            providers = [p for p in providers if p.ALLOWED_IN_SCHEDULED_CHECKS]
 
         async def _safe_search(provider):
 
@@ -50,7 +65,7 @@ class ProviderManager:
                 return []
 
         results_lists = await asyncio.gather(
-            *(_safe_search(provider) for provider in self.providers)
+            *(_safe_search(provider) for provider in providers)
         )
 
         results = [result for sublist in results_lists for result in sublist]
