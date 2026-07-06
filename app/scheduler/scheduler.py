@@ -93,7 +93,7 @@ async def hourly_check(application):
             f"🏢 {result.provider}\n"
             f"Airline: {result.airline}\n"
             f"Price: {result.price:.0f} {result.currency}\n"
-            f"Target: {flight.max_price:.0f} {result.currency}\n"
+            f"Target: {flight.max_price:.0f} SAR\n"
             f"Why: {decision.reason}"
         )
 

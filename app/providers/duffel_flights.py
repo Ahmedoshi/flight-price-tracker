@@ -29,6 +29,7 @@ from app.config.settings import settings
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
 from app.providers.base_provider import BaseProvider
+from app.services.fx_service import convert_to_sar
 
 OFFER_REQUESTS_URL = "https://api.duffel.com/air/offer_requests"
 
@@ -105,6 +106,13 @@ class DuffelFlightsProvider(BaseProvider):
 
             except (KeyError, ValueError):
                 continue
+
+            # Duffel's total_currency is fixed to this account's billing
+            # currency (not requestable per search, unlike every other
+            # provider here) - convert to SAR so it's comparable against
+            # the user's SAR-denominated target price. See fx_service.py.
+            if currency.upper() != "SAR":
+                price, currency = await convert_to_sar(price, currency)
 
             airline = (offer.get("owner") or {}).get("name", "Unknown")
 
