@@ -58,7 +58,10 @@ async def hourly_check(application):
         if result is None:
             continue
 
-        decision = evaluate_alert(flight, result.price, now)
+        stats = analytics.compute_stats(flight, since_days=settings.analytics_window_days)
+        route_avg_price = stats.avg_price if stats is not None else None
+
+        decision = evaluate_alert(flight, result.price, now, route_avg_price=route_avg_price)
 
         tracking.update_tracking(
             flight_id=flight.id,
@@ -74,7 +77,12 @@ async def hourly_check(application):
         if not decision.should_notify:
             continue
 
-        header = "🚨 EXCEPTIONAL FARE ALERT 🚨" if decision.escalate else "🔥 Price Alert"
+        if decision.is_flash_deal:
+            header = "⚡ FLASH DEAL ⚡"
+        elif decision.escalate:
+            header = "🚨 EXCEPTIONAL FARE ALERT 🚨"
+        else:
+            header = "🔥 Price Alert"
 
         text = (
             f"{header}\n\n"
@@ -89,8 +97,6 @@ async def hourly_check(application):
 
         if result.booking_url:
             text += f"\n🔗 {result.booking_url}"
-
-        stats = analytics.compute_stats(flight, since_days=settings.analytics_window_days)
 
         if stats is not None:
             recommendation = analytics.recommendation(result.price, stats)

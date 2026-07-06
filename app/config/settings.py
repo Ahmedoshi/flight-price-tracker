@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     # treated as an escalated alert (bypasses quiet hours).
     escalation_drop_threshold_pct: float = 30.0
 
+    # A "flash deal": price is at least this % below the route's own
+    # historical average (over analytics_window_days), regardless of
+    # whether it's a new all-time low or a big drop since the last
+    # check - catches a sudden, unusually cheap fare even if the route
+    # is normally volatile enough that it isn't a record low.
+    flash_deal_drop_pct: float = 25.0
+
+    # Duplicate-alert suppression: don't re-notify unless the price has
+    # moved by at least this % since the last price we actually alerted
+    # on. Without this, a flight sitting under its target price (or
+    # bouncing by a dollar or two) re-fires an alert on every single
+    # scheduled check.
+    dedup_tolerance_pct: float = 3.0
+
     # Suppress (non-escalated) alerts between these local hours.
     # Equal values (default) disables quiet hours entirely.
     quiet_hours_start: int = 0

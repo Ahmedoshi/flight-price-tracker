@@ -233,6 +233,7 @@ def analytics_screen():
             continue
 
         trend_emoji = TREND_EMOJI.get(stats.trend, "➡️")
+        trend_detail = f" ({abs(stats.trend_pct):.0f}%)" if stats.trend != "flat" else ""
 
         text = (
             f"📊 Flight #{position} — last {window_days}d\n\n"
@@ -241,7 +242,7 @@ def analytics_screen():
             f"📉 Min : {stats.min_price:.0f} SAR\n"
             f"📈 Max : {stats.max_price:.0f} SAR\n"
             f"📊 Avg : {stats.avg_price:.0f} SAR\n"
-            f"{trend_emoji} Trend : {stats.trend}\n\n"
+            f"{trend_emoji} Trend : {stats.trend}{trend_detail}\n\n"
             f"🗓 Best day to book : {stats.best_booking_day or '—'}\n"
             f"🛫 Best departure day : {stats.best_departure_day or '—'}\n\n"
             f"🔢 Based on {stats.count} check(s)"

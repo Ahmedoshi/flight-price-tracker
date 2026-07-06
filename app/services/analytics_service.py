@@ -14,8 +14,47 @@ class RouteStats:
     max_price: float
     avg_price: float
     trend: str  # "up" | "down" | "flat"
+    trend_pct: float  # % change, second-half avg vs first-half avg (signed)
     best_booking_day: str | None  # weekday name with the lowest avg price
     best_departure_day: str | None  # weekday name (by departure date)
+
+
+# Below this magnitude, a change in the first-half/second-half average
+# is treated as noise rather than a real trend.
+TREND_NOISE_THRESHOLD_PCT = 2.0
+
+
+def _trend_from_prices(prices: list[float]) -> tuple[str, float]:
+    """Trend across the whole window, not just the last two checks.
+
+    Compares the average of the first half of the (chronologically
+    ordered) prices against the average of the second half - more
+    resistant to a single noisy reading than a last-two-points
+    comparison, while still being simple enough to reason about.
+    """
+
+    if len(prices) < 2:
+        return "flat", 0.0
+
+    midpoint = len(prices) // 2
+    first_half = prices[:midpoint] or prices[:1]
+    second_half = prices[midpoint:]
+
+    first_avg = sum(first_half) / len(first_half)
+    second_avg = sum(second_half) / len(second_half)
+
+    if first_avg <= 0:
+        return "flat", 0.0
+
+    change_pct = (second_avg - first_avg) / first_avg * 100
+
+    if change_pct > TREND_NOISE_THRESHOLD_PCT:
+        return "up", change_pct
+
+    if change_pct < -TREND_NOISE_THRESHOLD_PCT:
+        return "down", change_pct
+
+    return "flat", change_pct
 
 
 class AnalyticsService:
@@ -80,13 +119,44 @@ class AnalyticsService:
                 "Recommended: buy now."
             )
 
+        # Combine trend direction/strength with where the price sits
+        # relative to the recent low, rather than just the average -
+        # "falling but still expensive" and "falling and already cheap"
+        # deserve different advice.
+        near_low = current_price <= stats.min_price * 1.05
+
+        if stats.trend == "down":
+
+            if near_low:
+                return (
+                    f"🟢 Prices are trending down ({abs(stats.trend_pct):.0f}% over "
+                    f"the last {window_days} days) and you're already close to the "
+                    "recent low. Good time to buy - it could dip a little further, "
+                    "but not by much."
+                )
+
+            return (
+                f"🟡 Prices are trending down ({abs(stats.trend_pct):.0f}% over the "
+                f"last {window_days} days). Worth waiting a bit longer if your dates "
+                "are flexible."
+            )
+
+        if stats.trend == "up":
+            return (
+                f"🔴 Prices are trending up ({stats.trend_pct:.0f}% over the last "
+                f"{window_days} days). Booking soon is safer than waiting."
+            )
+
         if current_price <= stats.avg_price * 0.95:
             return "🟡 Below the recent average — a reasonable time to book."
 
         if current_price >= stats.avg_price * 1.10:
             return "🔴 Above the recent average — you may want to wait."
 
-        return "⚪ Around the recent average price — no strong signal either way."
+        return (
+            "⚪ Around the recent average price with no clear trend — "
+            "no strong signal either way."
+        )
 
 
 def _compute_stats(rows) -> RouteStats | None:
@@ -100,14 +170,7 @@ def _compute_stats(rows) -> RouteStats | None:
     maximum = max(prices)
     average = sum(prices) / len(prices)
 
-    trend = "flat"
-
-    if len(prices) >= 2:
-
-        if prices[-1] < prices[-2]:
-            trend = "down"
-        elif prices[-1] > prices[-2]:
-            trend = "up"
+    trend, trend_pct = _trend_from_prices(prices)
 
     booking_day_prices = defaultdict(list)
     departure_day_prices = defaultdict(list)
@@ -135,6 +198,7 @@ def _compute_stats(rows) -> RouteStats | None:
         max_price=maximum,
         avg_price=average,
         trend=trend,
+        trend_pct=trend_pct,
         best_booking_day=best_booking_day,
         best_departure_day=best_departure_day,
     )
