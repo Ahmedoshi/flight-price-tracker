@@ -244,14 +244,24 @@ def _priciest_day(day_prices: dict) -> str | None:
     return max(day_prices, key=lambda day: sum(day_prices[day]) / len(day_prices[day]))
 
 
-def _parse_timestamp(value: str) -> datetime | None:
+def _parse_timestamp(value) -> datetime | None:
+    """Parse a price_history.checked_at value into a datetime.
+
+    SQLite always hands this column back as a plain string, but
+    Postgres (Roadmap Phase 5) decodes its TIMESTAMP column straight
+    into a native datetime.datetime via psycopg2 - so this needs to
+    accept both, not just strings.
+    """
+
+    if isinstance(value, datetime):
+        return value
 
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
 
         try:
             return datetime.strptime(value, fmt)
 
-        except ValueError:
+        except (TypeError, ValueError):
             continue
 
     return None

@@ -11,6 +11,7 @@ from app.services import provider_health
 from app.services.analytics_service import AnalyticsService, TREND_EMOJI
 from app.services.chart_service import ascii_sparkline
 from app.services.tracking_service import TrackingService
+from app.utils.dates import format_checked_at
 from app.utils.text import esc
 
 tracking = TrackingService()
@@ -243,7 +244,7 @@ def history_screen():
 
         text += (
             f"{DIVIDER}\n"
-            f"<i>{esc(checked_at)}</i>\n\n"
+            f"<i>{esc(format_checked_at(checked_at))}</i>\n\n"
             f"✈ {esc(airline)}\n"
             f"💰 <b>{price:.0f} SAR</b>\n\n"
         )

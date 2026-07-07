@@ -9,7 +9,7 @@ from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
 from app.scheduler.scheduler import hourly_check
 from app.utils.airports import parse_codes, validate_codes
-from app.utils.dates import is_valid_date
+from app.utils.dates import format_checked_at, is_valid_date
 from app.utils.flight_filters import format_filters, parse_trailing_tokens
 from app.utils.search_scope import validate_search_scope
 from app.utils.text import esc
@@ -389,7 +389,7 @@ async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for airline, price, checked_at in rows:
 
         text += (
-            f"<i>{esc(checked_at)}</i>\n"
+            f"<i>{esc(format_checked_at(checked_at))}</i>\n"
             f"{esc(airline)}\n"
             f"<b>{price:.0f} SAR</b>\n\n"
         )

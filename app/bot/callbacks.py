@@ -28,6 +28,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.chart_service import ascii_sparkline, render_price_chart_png
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
+from app.utils.dates import format_checked_at
 from app.utils.text import esc
 
 tracking = TrackingService()
@@ -345,10 +346,10 @@ async def button_click(
             else:
 
                 prices = [row[0] for row in rows]
-                # row[2] is checked_at ("YYYY-MM-DD HH:MM:SS" or
-                # "YYYY-MM-DDTHH:MM:SS") - just the date portion reads
-                # cleanly as an x-axis label.
-                labels = [row[2][:10] for row in rows]
+                # row[2] is checked_at - a plain string on SQLite but a
+                # native datetime on Postgres (Roadmap Phase 5); just
+                # the date portion reads cleanly as an x-axis label.
+                labels = [format_checked_at(row[2], length=10) for row in rows]
 
                 spark = ascii_sparkline(prices)
 

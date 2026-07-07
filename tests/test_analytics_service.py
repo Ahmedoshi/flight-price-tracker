@@ -3,7 +3,7 @@
 import datetime
 
 from app.models.flight import Flight
-from app.services.analytics_service import AnalyticsService
+from app.services.analytics_service import AnalyticsService, _compute_stats, _parse_timestamp
 
 
 def _seed_price_history(dbmod, prices, start=datetime.datetime(2026, 6, 1)):
@@ -145,3 +145,36 @@ def test_recommendation_handles_insufficient_history(temp_db):
     recommendation = analytics.recommendation(2000, stats=None)
 
     assert "not enough" in recommendation.lower()
+
+
+def test_parse_timestamp_accepts_native_datetime():
+    """Regression test: Postgres (Roadmap Phase 5) decodes the
+    checked_at TIMESTAMP column into a native datetime.datetime via
+    psycopg2, unlike SQLite which always hands back a plain string.
+    _parse_timestamp() must accept both without raising."""
+
+    value = datetime.datetime(2026, 7, 6, 14, 46, 21)
+
+    assert _parse_timestamp(value) == value
+    assert _parse_timestamp("2026-07-06 14:46:21") == value
+
+
+def test_compute_stats_handles_postgres_style_datetime_rows():
+    """Regression test for the production crash: _compute_stats() (via
+    analytics_screen) threw TypeError: strptime() argument 1 must be
+    str, not datetime.datetime the moment checked_at rows came back as
+    real datetimes instead of strings - simulates exactly that shape
+    without needing a live Postgres connection."""
+
+    rows = [
+        (2600.0, "2026-09-30", datetime.datetime(2026, 7, 1, 10, 0, 0)),
+        (2400.0, "2026-09-30", datetime.datetime(2026, 7, 2, 10, 0, 0)),
+        (2200.0, "2026-09-30", datetime.datetime(2026, 7, 3, 10, 0, 0)),
+    ]
+
+    stats = _compute_stats(rows)
+
+    assert stats is not None
+    assert stats.count == 3
+    assert stats.min_price == 2200.0
+    assert stats.best_booking_day is not None
