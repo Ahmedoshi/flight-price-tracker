@@ -1,3 +1,6 @@
+import asyncio
+import io
+
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -20,7 +23,9 @@ from app.scheduler.scheduler import (
     resume_scheduler,
     set_interval_hours,
 )
+from app.config.settings import settings
 from app.services.analytics_service import AnalyticsService
+from app.services.chart_service import ascii_sparkline, render_price_chart_png
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
 
@@ -304,6 +309,71 @@ async def button_click(
 
                 await query.message.reply_text(
                     text=text,
+                    reply_markup=main_menu(),
+                )
+
+    # ==========================
+    # CHART (price history - ASCII sparkline + PNG line chart)
+    # ==========================
+
+    elif query.data.startswith("chart_"):
+
+        flight_id = int(query.data.split("_")[1])
+        flight = tracking.get_by_id(flight_id)
+
+        if flight is None:
+
+            await query.message.reply_text(
+                "❌ That flight no longer exists.",
+                reply_markup=main_menu(),
+            )
+
+        else:
+
+            window_days = settings.analytics_window_days
+            rows = tracking.route_history(flight, since_days=window_days)
+
+            if len(rows) < 2:
+
+                await query.message.reply_text(
+                    "📉 Not enough price history yet for a chart "
+                    "(need at least 2 checks).",
+                    reply_markup=main_menu(),
+                )
+
+            else:
+
+                prices = [row[0] for row in rows]
+                # row[2] is checked_at ("YYYY-MM-DD HH:MM:SS" or
+                # "YYYY-MM-DDTHH:MM:SS") - just the date portion reads
+                # cleanly as an x-axis label.
+                labels = [row[2][:10] for row in rows]
+
+                spark = ascii_sparkline(prices)
+
+                text = (
+                    f"📉 {flight.origin} ➜ {flight.destination} — last {window_days}d\n\n"
+                    f"{spark}\n\n"
+                    f"Low {min(prices):.0f} · High {max(prices):.0f} · "
+                    f"Latest {prices[-1]:.0f} SAR"
+                )
+
+                await query.message.reply_text(text=text)
+
+                # matplotlib rendering is blocking CPU work - offload
+                # to a worker thread so it can't stall the event loop
+                # (same reasoning as fast_flights' get_flights() and
+                # Twilio's client.messages.create()).
+                png_bytes = await asyncio.to_thread(
+                    render_price_chart_png,
+                    prices=prices,
+                    labels=labels,
+                    title=f"{flight.origin} ➜ {flight.destination}",
+                    target_price=flight.max_price,
+                )
+
+                await query.message.reply_photo(
+                    photo=io.BytesIO(png_bytes),
                     reply_markup=main_menu(),
                 )
 

@@ -176,6 +176,13 @@ def flight_card(flight_id: int):
 
         [
             InlineKeyboardButton(
+                "📉 Chart",
+                callback_data=f"chart_{flight_id}",
+            ),
+        ],
+
+        [
+            InlineKeyboardButton(
                 "✏️ Edit",
                 callback_data=f"edit_{flight_id}",
             ),
