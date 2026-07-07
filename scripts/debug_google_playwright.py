@@ -1,3 +1,10 @@
+"""Manual debug script - launches a REAL visible browser and drives
+google.com/travel/flights directly via Playwright. Not a pytest test
+(moved out of tests/ so pytest's default collection can't import and
+execute this at collection time). Run with:
+python3 scripts/debug_google_playwright.py
+"""
+
 from playwright.sync_api import sync_playwright
 
 with sync_playwright() as p:

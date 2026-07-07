@@ -1,0 +1,147 @@
+"""Tests for the expanded analytics dashboard (Roadmap Phase 3)."""
+
+import datetime
+
+from app.models.flight import Flight
+from app.services.analytics_service import AnalyticsService
+
+
+def _seed_price_history(dbmod, prices, start=datetime.datetime(2026, 6, 1)):
+
+    conn = dbmod.get_connection()
+
+    for i, price in enumerate(prices):
+
+        checked_at = (start + datetime.timedelta(days=i)).strftime("%Y-%m-%d %H:%M:%S")
+
+        conn.execute(
+            """
+            INSERT INTO price_history
+            (origin, destination, departure_date, return_date, airline, price, checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("RUH", "LIS", "2026-09-30", "2026-10-20", "TestAir", price, checked_at),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def _flight():
+
+    return Flight(
+        origin="RUH",
+        destination="LIS",
+        departure_date="2026-09-30",
+        return_date="2026-10-20",
+        max_price=2000,
+    )
+
+
+def test_compute_stats_returns_none_with_no_history(temp_db):
+
+    analytics = AnalyticsService()
+    stats = analytics.compute_stats(_flight(), since_days=45)
+
+    assert stats is None
+
+
+def test_compute_stats_basic_aggregates(temp_db):
+
+    prices = [2600, 2550, 2400, 2650, 2300, 2200, 2350, 2100, 2000, 2150, 1950, 1900, 2050, 1850]
+    _seed_price_history(temp_db, prices)
+
+    analytics = AnalyticsService()
+    stats = analytics.compute_stats(_flight(), since_days=45)
+
+    assert stats.count == len(prices)
+    assert stats.min_price == min(prices)
+    assert stats.max_price == max(prices)
+    assert stats.avg_price == sum(prices) / len(prices)
+    # median of a sorted 14-item list is the average of the two middle values
+    assert stats.median_price > 0
+    assert stats.volatility_pct > 0
+
+
+def test_compute_stats_downward_trend_detected(temp_db):
+
+    # Clearly higher first half, clearly lower second half.
+    prices = [2600, 2550, 2400, 2650, 2300, 2200, 1350, 1100, 1000, 1150, 950, 900, 1050, 850]
+    _seed_price_history(temp_db, prices)
+
+    analytics = AnalyticsService()
+    stats = analytics.compute_stats(_flight(), since_days=45)
+
+    assert stats.trend == "down"
+    assert stats.trend_pct < 0
+
+
+def test_expected_price_reflects_recent_half_not_whole_window(temp_db):
+
+    # First half much higher than second half - expected_price (recent
+    # regime) should sit close to the second half, well below avg_price.
+    first_half = [3000, 3000, 3000, 3000, 3000, 3000, 3000]
+    second_half = [1000, 1000, 1000, 1000, 1000, 1000, 1000]
+    _seed_price_history(temp_db, first_half + second_half)
+
+    analytics = AnalyticsService()
+    stats = analytics.compute_stats(_flight(), since_days=45)
+
+    assert stats.expected_price == 1000
+    assert stats.avg_price == 2000
+    assert stats.expected_price < stats.avg_price
+
+
+def test_best_and_worst_booking_day_differ(temp_db):
+
+    # Mondays cheap, Fridays expensive - 2026-06-01 is a Monday.
+    conn = temp_db.get_connection()
+
+    rows = [
+        ("2026-06-01 10:00:00", 1000),  # Monday
+        ("2026-06-08 10:00:00", 1000),  # Monday
+        ("2026-06-05 10:00:00", 3000),  # Friday
+        ("2026-06-12 10:00:00", 3000),  # Friday
+    ]
+
+    for checked_at, price in rows:
+
+        conn.execute(
+            """
+            INSERT INTO price_history
+            (origin, destination, departure_date, return_date, airline, price, checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("RUH", "LIS", "2026-09-30", "2026-10-20", "TestAir", price, checked_at),
+        )
+
+    conn.commit()
+    conn.close()
+
+    analytics = AnalyticsService()
+    stats = analytics.compute_stats(_flight(), since_days=45)
+
+    assert stats.best_booking_day == "Monday"
+    assert stats.worst_booking_day == "Friday"
+
+
+def test_recommendation_says_buy_now_at_the_lowest_price(temp_db):
+
+    prices = [2600, 2550, 2400, 2650, 2300, 2200, 2350, 2100, 2000, 2150, 1950, 1900, 2050, 1850]
+    _seed_price_history(temp_db, prices)
+
+    analytics = AnalyticsService()
+    stats = analytics.compute_stats(_flight(), since_days=45)
+
+    recommendation = analytics.recommendation(min(prices), stats)
+
+    assert "lowest price" in recommendation.lower()
+    assert "buy now" in recommendation.lower()
+
+
+def test_recommendation_handles_insufficient_history(temp_db):
+
+    analytics = AnalyticsService()
+    recommendation = analytics.recommendation(2000, stats=None)
+
+    assert "not enough" in recommendation.lower()

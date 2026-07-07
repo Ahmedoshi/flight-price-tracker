@@ -1,3 +1,9 @@
+"""Manual debug script - makes a REAL live Google Flights request via
+fast_flights when run directly. Not a pytest test (moved out of
+tests/ so pytest's default collection can't import and execute this
+at collection time). Run with: python3 scripts/debug_fast_flights.py
+"""
+
 from fast_flights import *
 from pprint import pprint
 
