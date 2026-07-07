@@ -1,10 +1,12 @@
 from loguru import logger
 from telegram import BotCommand, Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     ContextTypes,
+    Defaults,
     PicklePersistence,
 )
 
@@ -106,9 +108,17 @@ def main():
     persistence_path.parent.mkdir(parents=True, exist_ok=True)
     persistence = PicklePersistence(filepath=persistence_path)
 
+    # HTML parse mode by default means every screen/message can use
+    # <b>bold</b>/<i>italic</i>/<code>monospace</code> without passing
+    # parse_mode= at every single call site - one flag, applies
+    # everywhere (bot.send_message, message.reply_text/reply_photo,
+    # query.edit_message_text, the scheduler's alert sends, etc).
+    defaults = Defaults(parse_mode=ParseMode.HTML)
+
     application = (
         Application.builder()
         .token(settings.bot_token)
+        .defaults(defaults)
         .post_init(post_init)
         .persistence(persistence)
         .build()

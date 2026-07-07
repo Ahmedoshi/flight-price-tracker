@@ -9,10 +9,17 @@ from app.config.settings import settings
 from app.scheduler.scheduler import get_status
 from app.services import provider_health
 from app.services.analytics_service import AnalyticsService, TREND_EMOJI
+from app.services.chart_service import ascii_sparkline
 from app.services.tracking_service import TrackingService
+from app.utils.text import esc
 
 tracking = TrackingService()
 analytics = AnalyticsService()
+
+# A lighter separator than a full-width solid block - bold section
+# headers now carry the visual hierarchy, so the divider only needs to
+# be a subtle break between sections rather than an equal-weight bar.
+DIVIDER = "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈"
 
 
 def _provider_status_lines() -> str:
@@ -30,7 +37,7 @@ def _provider_status_lines() -> str:
     for name, enabled in providers:
 
         if not enabled:
-            lines.append(f"⚪ {name} : Not configured")
+            lines.append(f"⚪ {name} : <i>Not configured</i>")
             continue
 
         stats = provider_health.get_stats(name)
@@ -41,7 +48,7 @@ def _provider_status_lines() -> str:
                 0,
                 int((stats["disabled_until"] - datetime.now(timezone.utc)).total_seconds() // 60),
             )
-            lines.append(f"🔴 {name} : Offline (retrying in ~{retry_mins}m)")
+            lines.append(f"🔴 {name} : Offline <i>(retrying in ~{retry_mins}m)</i>")
             continue
 
         if stats["total_checks"] == 0:
@@ -52,14 +59,14 @@ def _provider_status_lines() -> str:
             # Has failures but hasn't tripped the auto-disable
             # threshold (or hasn't succeeded even once) yet.
             lines.append(
-                f"🟡 {name} : Struggling — {stats['success_rate_pct']:.0f}% success "
-                f"({stats['total_checks']} checks, {stats['consecutive_failures']} failures in a row)"
+                f"🟡 {name} : Struggling — <b>{stats['success_rate_pct']:.0f}%</b> success "
+                f"<i>({stats['total_checks']} checks, {stats['consecutive_failures']} in a row)</i>"
             )
             continue
 
         lines.append(
             f"🟢 {name} : Ready — avg {stats['avg_response_seconds']:.1f}s, "
-            f"{stats['success_rate_pct']:.0f}% success ({stats['total_checks']} checks)"
+            f"<b>{stats['success_rate_pct']:.0f}%</b> success <i>({stats['total_checks']} checks)</i>"
         )
 
     return "\n".join(lines)
@@ -77,14 +84,14 @@ def home_screen():
     )
 
     text = (
-        "✈️ Flight Price Tracker\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "👋 Welcome\n\n"
+        "<b>✈️ Flight Price Tracker</b>\n\n"
+        f"{DIVIDER}\n\n"
+        "👋 Welcome back\n\n"
         "🟢 Bot Online\n"
-        f"📍 Flights Tracked : {len(flights)}\n"
-        f"⏰ Scheduler : {schedule_text}\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Choose an action:"
+        f"📍 Flights Tracked : <b>{len(flights)}</b>\n"
+        f"⏰ Scheduler : <b>{schedule_text}</b>\n\n"
+        f"{DIVIDER}\n\n"
+        "<i>Choose an action:</i>"
     )
 
     return text, main_menu()
@@ -102,17 +109,17 @@ def status_screen():
         and settings.whatsapp_to
     )
     whatsapp_icon = "🟢" if whatsapp_ready else "⚪"
-    whatsapp_label = "Ready" if whatsapp_ready else "Not configured"
+    whatsapp_label = "Ready" if whatsapp_ready else "<i>Not configured</i>"
 
     text = (
-        "ℹ️ System Status\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>ℹ️ System Status</b>\n\n"
+        f"{DIVIDER}\n\n"
         "🟢 Bot : Online\n"
         "🟢 Database : Connected\n"
         f"{_provider_status_lines()}\n"
         f"{whatsapp_icon} WhatsApp Alerts : {whatsapp_label}\n"
-        f"{'🟢' if is_running else '⏸'} Scheduler : {'Running' if is_running else 'Paused'}\n\n"
-        f"📍 Saved Flights : {len(flights)}"
+        f"{'🟢' if is_running else '⏸'} Scheduler : <b>{'Running' if is_running else 'Paused'}</b>\n\n"
+        f"📍 Saved Flights : <b>{len(flights)}</b>"
     )
 
     return text, main_menu()
@@ -123,12 +130,12 @@ def scheduler_screen():
     is_running, interval_hours = get_status()
 
     text = (
-        "⚙️ Scheduler\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>⚙️ Scheduler</b>\n\n"
+        f"{DIVIDER}\n\n"
         "Status\n"
-        f"{'🟢 Running' if is_running else '⏸ Paused'}\n\n"
+        f"{'🟢 <b>Running</b>' if is_running else '⏸ <b>Paused</b>'}\n\n"
         "Current Interval\n"
-        f"🕑 Every {interval_hours} Hour{'s' if interval_hours != 1 else ''}"
+        f"🕑 Every <b>{interval_hours}</b> Hour{'s' if interval_hours != 1 else ''}"
     )
 
     return text, scheduler_menu()
@@ -142,7 +149,7 @@ def flights_screen():
 
         return [
             (
-                "📋 My Flights\n\nNo saved flights.",
+                "<b>📋 My Flights</b>\n\n<i>No saved flights.</i>",
                 main_menu(),
             )
         ]
@@ -154,17 +161,17 @@ def flights_screen():
         if flight.trip_type == "multi-city" and flight.legs:
 
             legs_text = "\n".join(
-                f"  {i}. {leg['origin']} ➜ {leg['destination']} ({leg['date']})"
+                f"  {i}. {esc(leg['origin'])} ➜ {esc(leg['destination'])} ({esc(leg['date'])})"
                 for i, leg in enumerate(flight.legs, start=1)
             )
 
             filters_line = _filters_summary(flight)
 
             text = (
-                f"✈️ Flight #{position} — 🌍 Multi-city\n\n"
-                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"<b>✈️ Flight #{position}</b> — 🌍 Multi-city\n\n"
+                f"{DIVIDER}\n\n"
                 f"{legs_text}\n\n"
-                f"🎯 Target : {flight.max_price:.0f} SAR"
+                f"🎯 Target : <b>{flight.max_price:.0f} SAR</b>"
                 f"{filters_line}"
             )
 
@@ -172,24 +179,24 @@ def flights_screen():
             continue
 
         flex_text = (
-            f" (+/-{flight.date_flex_days}d)" if flight.date_flex_days else ""
+            f" <i>(+/-{flight.date_flex_days}d)</i>" if flight.date_flex_days else ""
         )
 
         return_line = (
-            f"↩ Return : {flight.return_date}{flex_text}\n\n"
+            f"↩ Return : {esc(flight.return_date)}{flex_text}\n\n"
             if flight.trip_type == "round-trip"
-            else "↩ One-way\n\n"
+            else "↩ <i>One-way</i>\n\n"
         )
 
         filters_line = _filters_summary(flight)
 
         text = (
-            f"✈️ Flight #{position}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{flight.origin} ➜ {flight.destination}\n\n"
-            f"📅 Departure : {flight.departure_date}\n"
+            f"<b>✈️ Flight #{position}</b>\n\n"
+            f"{DIVIDER}\n\n"
+            f"<b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n\n"
+            f"📅 Departure : {esc(flight.departure_date)}\n"
             f"{return_line}"
-            f"🎯 Target : {flight.max_price:.0f} SAR"
+            f"🎯 Target : <b>{flight.max_price:.0f} SAR</b>"
             f"{filters_line}"
         )
 
@@ -216,7 +223,7 @@ def _filters_summary(flight) -> str:
     if not parts:
         return ""
 
-    return "\n\n🎛 " + ", ".join(parts)
+    return "\n\n🎛 <i>" + ", ".join(parts) + "</i>"
 
 
 def history_screen():
@@ -226,19 +233,19 @@ def history_screen():
     if not rows:
 
         return (
-            "📈 Price History\n\nNo price history.",
+            "<b>📈 Price History</b>\n\n<i>No price history.</i>",
             main_menu(),
         )
 
-    text = "📈 Price History\n\n"
+    text = "<b>📈 Price History</b>\n\n"
 
     for airline, price, checked_at in rows[:10]:
 
         text += (
-            "━━━━━━━━━━━━━━\n"
-            f"{checked_at}\n\n"
-            f"✈ {airline}\n"
-            f"💰 {price:.0f} SAR\n\n"
+            f"{DIVIDER}\n"
+            f"<i>{esc(checked_at)}</i>\n\n"
+            f"✈ {esc(airline)}\n"
+            f"💰 <b>{price:.0f} SAR</b>\n\n"
         )
 
     return text, main_menu()
@@ -252,7 +259,7 @@ def analytics_screen():
 
         return [
             (
-                "📊 Analytics\n\nNo saved flights yet.",
+                "<b>📊 Analytics</b>\n\n<i>No saved flights yet.</i>",
                 main_menu(),
             )
         ]
@@ -267,9 +274,9 @@ def analytics_screen():
         if stats is None:
 
             text = (
-                f"📊 Flight #{position}\n\n"
-                f"{flight.origin} ➜ {flight.destination}\n\n"
-                "No price history yet — run a check first."
+                f"<b>📊 Flight #{position}</b>\n\n"
+                f"{esc(flight.origin)} ➜ {esc(flight.destination)}\n\n"
+                "<i>No price history yet — run a check first.</i>"
             )
             cards.append((text, main_menu()))
             continue
@@ -277,21 +284,27 @@ def analytics_screen():
         trend_emoji = TREND_EMOJI.get(stats.trend, "➡️")
         trend_detail = f" ({abs(stats.trend_pct):.0f}%)" if stats.trend != "flat" else ""
 
+        rows = tracking.route_history(flight, since_days=window_days)
+        prices = [row[0] for row in rows]
+        spark = ascii_sparkline(prices)
+        spark_line = f"{spark}\n\n" if spark else ""
+
         text = (
-            f"📊 Flight #{position} — last {window_days}d\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{flight.origin} ➜ {flight.destination}\n\n"
+            f"<b>📊 Flight #{position}</b> — <i>last {window_days}d</i>\n\n"
+            f"{DIVIDER}\n\n"
+            f"<b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n\n"
+            f"{spark_line}"
             f"📉 Min : {stats.min_price:.0f} SAR\n"
             f"📈 Max : {stats.max_price:.0f} SAR\n"
             f"📊 Avg : {stats.avg_price:.0f} SAR\n"
             f"🎯 Median : {stats.median_price:.0f} SAR\n"
             f"📶 Volatility : {stats.volatility_pct:.0f}%\n"
             f"{trend_emoji} Trend : {stats.trend}{trend_detail}\n"
-            f"🔮 Expected now : {stats.expected_price:.0f} SAR\n\n"
-            f"🗓 Best day to book : {stats.best_booking_day or '—'}\n"
-            f"😖 Worst day to book : {stats.worst_booking_day or '—'}\n"
-            f"🛫 Best departure day : {stats.best_departure_day or '—'}\n\n"
-            f"🔢 Based on {stats.count} check(s)"
+            f"🔮 Expected now : <b>{stats.expected_price:.0f} SAR</b>\n\n"
+            f"🗓 Best day to book : {esc(stats.best_booking_day) if stats.best_booking_day else '—'}\n"
+            f"😖 Worst day to book : {esc(stats.worst_booking_day) if stats.worst_booking_day else '—'}\n"
+            f"🛫 Best departure day : {esc(stats.best_departure_day) if stats.best_departure_day else '—'}\n\n"
+            f"<i>Based on {stats.count} check(s)</i>"
         )
 
         if flight.last_price is not None:
@@ -299,7 +312,7 @@ def analytics_screen():
             recommendation = analytics.recommendation(
                 flight.last_price, stats, window_days
             )
-            text += f"\n\n{recommendation}"
+            text += f"\n\n<b>{recommendation}</b>"
 
         cards.append((text, main_menu()))
 

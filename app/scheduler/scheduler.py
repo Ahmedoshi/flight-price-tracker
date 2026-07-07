@@ -10,6 +10,7 @@ from app.services.flight_service import FlightService
 from app.services.notification_rules import evaluate_alert
 from app.services.tracking_service import TrackingService
 from app.services.whatsapp_service import send_whatsapp
+from app.utils.text import esc
 
 
 scheduler = AsyncIOScheduler(timezone=settings.timezone)
@@ -107,7 +108,25 @@ async def hourly_check(application):
         else:
             header = "🔥 Price Alert"
 
-        text = (
+        recommendation = analytics.recommendation(result.price, stats) if stats is not None else None
+
+        # Telegram gets HTML formatting (bold header/price); WhatsApp
+        # (via Twilio) has no idea what an HTML tag is and would show
+        # literal "<b>" text to the recipient, so it gets its own plain
+        # version built from the same data rather than reusing the
+        # Telegram string.
+        telegram_text = (
+            f"<b>{header}</b>\n\n"
+            f"<b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n"
+            f"📅 {esc(result.departure_date)} / 🔁 {esc(result.return_date)}\n"
+            f"🏢 {esc(result.provider)}\n"
+            f"Airline: {esc(result.airline)}\n"
+            f"Price: <b>{result.price:.0f} {esc(result.currency)}</b>\n"
+            f"Target: {flight.max_price:.0f} SAR\n"
+            f"Why: {esc(decision.reason)}"
+        )
+
+        whatsapp_text = (
             f"{header}\n\n"
             f"{result.origin} ➜ {result.destination}\n"
             f"📅 {result.departure_date} / 🔁 {result.return_date}\n"
@@ -119,22 +138,23 @@ async def hourly_check(application):
         )
 
         if result.booking_url:
-            text += f"\n🔗 {result.booking_url}"
+            telegram_text += f'\n<a href="{esc(result.booking_url)}">🔗 View Flight</a>'
+            whatsapp_text += f"\n🔗 {result.booking_url}"
 
-        if stats is not None:
-            recommendation = analytics.recommendation(result.price, stats)
-            text += f"\n\n{recommendation}"
+        if recommendation:
+            telegram_text += f"\n\n<b>{recommendation}</b>"
+            whatsapp_text += f"\n\n{recommendation}"
 
         await application.bot.send_message(
             chat_id=settings.chat_id,
-            text=text,
+            text=telegram_text,
         )
 
         # Best-effort second channel - a WhatsApp delivery problem
         # should never stop the Telegram alert above or crash the
         # scheduler, so failures here are swallowed (send_whatsapp
         # already catches and logs internally).
-        await send_whatsapp(text)
+        await send_whatsapp(whatsapp_text)
 
 
 JOB_ID = "hourly-flight-check"

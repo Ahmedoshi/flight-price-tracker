@@ -34,56 +34,29 @@ def filters_keyboard(trip_type: str, cabin_class: str, max_stops: int | None):
 
 
 def main_menu():
+    """Paired into a 2-column grid rather than one button per row -
+    reads as a compact dashboard instead of a long vertical list of 7
+    separate rows."""
 
     keyboard = [
 
         [
-            InlineKeyboardButton(
-                "🔍 Check Flight",
-                callback_data="menu_check",
-            ),
+            InlineKeyboardButton("🔍 Check Flight", callback_data="menu_check"),
+            InlineKeyboardButton("➕ Add Flight", callback_data="menu_add"),
         ],
 
         [
-            InlineKeyboardButton(
-                "➕ Add Flight",
-                callback_data="menu_add",
-            ),
+            InlineKeyboardButton("📋 My Flights", callback_data="menu_list"),
+            InlineKeyboardButton("📈 Price History", callback_data="menu_history"),
         ],
 
         [
-            InlineKeyboardButton(
-                "📋 My Flights",
-                callback_data="menu_list",
-            ),
+            InlineKeyboardButton("📊 Analytics", callback_data="menu_analytics"),
+            InlineKeyboardButton("⚙️ Scheduler", callback_data="menu_scheduler"),
         ],
 
         [
-            InlineKeyboardButton(
-                "📈 Price History",
-                callback_data="menu_history",
-            ),
-        ],
-
-        [
-            InlineKeyboardButton(
-                "📊 Analytics",
-                callback_data="menu_analytics",
-            ),
-        ],
-
-        [
-            InlineKeyboardButton(
-                "⚙️ Scheduler",
-                callback_data="menu_scheduler",
-            ),
-        ],
-
-        [
-            InlineKeyboardButton(
-                "ℹ️ Status",
-                callback_data="menu_status",
-            ),
+            InlineKeyboardButton("ℹ️ Status", callback_data="menu_status"),
         ],
 
     ]

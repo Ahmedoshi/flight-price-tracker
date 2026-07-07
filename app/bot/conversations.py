@@ -16,6 +16,7 @@ from app.utils.airports import parse_codes, validate_codes
 from app.utils.dates import is_valid_date
 from app.utils.flight_filters import DEFAULT_FILTERS, format_filters
 from app.utils.search_scope import validate_search_scope
+from app.utils.text import esc
 
 tracking = TrackingService()
 
@@ -127,7 +128,7 @@ async def add_origin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if error or not codes:
 
         await update.message.reply_text(
-            f"❌ {error or 'Send at least one airport code.'}"
+            f"❌ {esc(error) if error else 'Send at least one airport code.'}"
         )
         return ADD_ORIGIN
 
@@ -149,7 +150,7 @@ async def add_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if error or not codes:
 
         await update.message.reply_text(
-            f"❌ {error or 'Send at least one airport code.'}"
+            f"❌ {esc(error) if error else 'Send at least one airport code.'}"
         )
         return ADD_DESTINATION
 
@@ -278,7 +279,7 @@ async def add_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code_error = validate_codes([origin]) or validate_codes([destination])
 
     if code_error:
-        await update.message.reply_text(f"❌ {code_error}")
+        await update.message.reply_text(f"❌ {esc(code_error)}")
         return ADD_MULTI_LEG
 
     if not is_valid_date(date_text):
@@ -364,7 +365,7 @@ async def add_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if error:
 
-        await update.message.reply_text(f"❌ {error}")
+        await update.message.reply_text(f"❌ {esc(error)}")
         return ADD_FLEX
 
     data["date_flex_days"] = flex_days
@@ -406,15 +407,15 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         legs_text = "\n".join(
-            f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+            f"{i}. {esc(leg['origin'])} ➜ {esc(leg['destination'])} on {esc(leg['date'])}"
             for i, leg in enumerate(legs, start=1)
         )
 
         await update.message.reply_text(
             text=(
-                "✅ Flight Added (multi-city)\n\n"
+                "✅ <b>Flight Added</b> <i>(multi-city)</i>\n\n"
                 f"{legs_text}\n\n"
-                f"🎯 Target : {max_price:.0f} SAR"
+                f"🎯 Target : <b>{max_price:.0f} SAR</b>"
             ),
             reply_markup=main_menu(),
         )
@@ -443,19 +444,19 @@ async def add_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     filters_line = f"\n🎛 {filters_text}" if filters_text else ""
 
     return_line = (
-        f"🔁 Return : {data['return_date']}\n"
+        f"🔁 Return : {esc(data['return_date'])}\n"
         if data["trip_type"] == "round-trip"
         else "↩ One-way\n"
     )
 
     await update.message.reply_text(
         text=(
-            "✅ Flight Added\n\n"
-            f"📍 {','.join(data['origin'])} ➜ {','.join(data['destination'])}\n\n"
-            f"📅 Departure : {data['departure_date']}\n"
+            "✅ <b>Flight Added</b>\n\n"
+            f"📍 <b>{esc(','.join(data['origin']))} ➜ {esc(','.join(data['destination']))}</b>\n\n"
+            f"📅 Departure : {esc(data['departure_date'])}\n"
             f"{return_line}"
             f"{flex_text}{filters_line}\n\n"
-            f"🎯 Target : {max_price:.0f} SAR"
+            f"🎯 Target : <b>{max_price:.0f} SAR</b>"
         ),
         reply_markup=main_menu(),
     )
@@ -505,7 +506,7 @@ async def check_origin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if error or not codes:
 
         await update.message.reply_text(
-            f"❌ {error or 'Send at least one airport code.'}"
+            f"❌ {esc(error) if error else 'Send at least one airport code.'}"
         )
         return CHECK_ORIGIN
 
@@ -527,7 +528,7 @@ async def check_destination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if error or not codes:
 
         await update.message.reply_text(
-            f"❌ {error or 'Send at least one airport code.'}"
+            f"❌ {esc(error) if error else 'Send at least one airport code.'}"
         )
         return CHECK_DESTINATION
 
@@ -656,7 +657,7 @@ async def check_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code_error = validate_codes([origin]) or validate_codes([destination])
 
     if code_error:
-        await update.message.reply_text(f"❌ {code_error}")
+        await update.message.reply_text(f"❌ {esc(code_error)}")
         return CHECK_MULTI_LEG
 
     if not is_valid_date(date_text):
@@ -677,7 +678,7 @@ async def check_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = context.user_data.pop("check")
 
     legs_text = "\n".join(
-        f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+        f"{i}. {esc(leg['origin'])} ➜ {esc(leg['destination'])} on {esc(leg['date'])}"
         for i, leg in enumerate(data["legs"], start=1)
     )
 
@@ -694,7 +695,7 @@ async def check_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except ValueError as exc:
 
-        await update.message.reply_text(f"❌ {exc}", reply_markup=main_menu())
+        await update.message.reply_text(f"❌ {esc(exc)}", reply_markup=main_menu())
         return ConversationHandler.END
 
     if result is None:
@@ -707,15 +708,15 @@ async def check_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     text = (
-        "✈️ Cheapest Multi-city Itinerary\n\n"
-        f"🏢 Provider : {result.provider}\n\n"
-        f"✈ Airline : {result.airline}\n\n"
-        f"💰 Price : {result.price:.0f} {result.currency}\n\n"
+        "<b>✈️ Cheapest Multi-city Itinerary</b>\n\n"
+        f"🏢 Provider : {esc(result.provider)}\n\n"
+        f"✈ Airline : {esc(result.airline)}\n\n"
+        f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
         f"{legs_text}"
     )
 
     if result.booking_url:
-        text += f"\n\n🔗 {result.booking_url}"
+        text += f'\n\n<a href="{esc(result.booking_url)}">🔗 View Flight</a>'
 
     await update.message.reply_text(
         text=text,
@@ -788,7 +789,7 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Put the data back since we're not ending the conversation.
         context.user_data["check"] = data
-        await update.message.reply_text(f"❌ {error}")
+        await update.message.reply_text(f"❌ {esc(error)}")
         return CHECK_FLEX
 
     combos = len(data["origin"]) * len(data["destination"]) * (2 * flex_days + 1)
@@ -812,7 +813,7 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError as exc:
 
         await update.message.reply_text(
-            f"❌ {exc}",
+            f"❌ {esc(exc)}",
             reply_markup=main_menu(),
         )
         return ConversationHandler.END
@@ -827,26 +828,26 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     text = (
-        "✈️ Cheapest Flight\n\n"
-        f"🏢 Provider : {result.provider}\n\n"
-        f"✈ Airline : {result.airline}\n\n"
-        f"💰 Price : {result.price:.0f} {result.currency}\n\n"
-        f"📍 Route : {result.origin} ➜ {result.destination}\n\n"
-        f"📅 Departure : {result.departure_date}"
+        "<b>✈️ Cheapest Flight</b>\n\n"
+        f"🏢 Provider : {esc(result.provider)}\n\n"
+        f"✈ Airline : {esc(result.airline)}\n\n"
+        f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
+        f"📍 Route : <b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n\n"
+        f"📅 Departure : {esc(result.departure_date)}"
     )
 
     if data["trip_type"] == "round-trip":
-        text += f"\n\n🔁 Return : {result.return_date}"
+        text += f"\n\n🔁 Return : {esc(result.return_date)}"
 
     if result.booking_url:
-        text += f"\n\n🔗 {result.booking_url}"
+        text += f'\n\n<a href="{esc(result.booking_url)}">🔗 View Flight</a>'
 
     recommendation = AnalyticsService().recommendation_for_route(
         result.origin, result.destination, result.price
     )
 
     if recommendation:
-        text += f"\n\n{recommendation}"
+        text += f"\n\n<b>{recommendation}</b>"
 
     await update.message.reply_text(
         text=text,
@@ -1095,7 +1096,7 @@ async def edit_multi_leg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code_error = validate_codes([origin]) or validate_codes([destination])
 
     if code_error:
-        await update.message.reply_text(f"❌ {code_error}")
+        await update.message.reply_text(f"❌ {esc(code_error)}")
         return EDIT_MULTI_LEG
 
     if not is_valid_date(date_text):
@@ -1198,7 +1199,7 @@ async def edit_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if error:
 
-            await update.message.reply_text(f"❌ {error}")
+            await update.message.reply_text(f"❌ {esc(error)}")
             return EDIT_FLEX
 
         data["date_flex_days"] = flex_days
@@ -1246,15 +1247,15 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         legs_text = "\n".join(
-            f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+            f"{i}. {esc(leg['origin'])} ➜ {esc(leg['destination'])} on {esc(leg['date'])}"
             for i, leg in enumerate(legs, start=1)
         )
 
         await update.message.reply_text(
             text=(
-                "✅ Flight Updated (multi-city)\n\n"
+                "✅ <b>Flight Updated</b> <i>(multi-city)</i>\n\n"
                 f"{legs_text}\n\n"
-                f"🎯 Target : {data['max_price']:.0f} SAR"
+                f"🎯 Target : <b>{data['max_price']:.0f} SAR</b>"
             ),
             reply_markup=main_menu(),
         )
@@ -1270,7 +1271,7 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if error:
 
         await update.message.reply_text(
-            f"❌ {error}\n\nEdit cancelled — nothing was changed.",
+            f"❌ {esc(error)}\n\nEdit cancelled — nothing was changed.",
             reply_markup=main_menu(),
         )
         return ConversationHandler.END
@@ -1298,19 +1299,19 @@ async def edit_target(update: Update, context: ContextTypes.DEFAULT_TYPE):
     filters_line = f"\n🎛 {filters_text}" if filters_text else ""
 
     return_line = (
-        f"🔁 Return : {data['return_date']}\n"
+        f"🔁 Return : {esc(data['return_date'])}\n"
         if data["trip_type"] == "round-trip"
         else "↩ One-way\n"
     )
 
     await update.message.reply_text(
         text=(
-            "✅ Flight Updated\n\n"
-            f"📍 {','.join(data['origin'])} ➜ {','.join(data['destination'])}\n\n"
-            f"📅 Departure : {data['departure_date']}\n"
+            "✅ <b>Flight Updated</b>\n\n"
+            f"📍 <b>{esc(','.join(data['origin']))} ➜ {esc(','.join(data['destination']))}</b>\n\n"
+            f"📅 Departure : {esc(data['departure_date'])}\n"
             f"{return_line}"
             f"{flex_text}{filters_line}\n\n"
-            f"🎯 Target : {data['max_price']:.0f} SAR"
+            f"🎯 Target : <b>{data['max_price']:.0f} SAR</b>"
         ),
         reply_markup=main_menu(),
     )

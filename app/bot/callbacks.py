@@ -28,6 +28,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.chart_service import ascii_sparkline, render_price_chart_png
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
+from app.utils.text import esc
 
 tracking = TrackingService()
 
@@ -248,7 +249,7 @@ async def button_click(
             except ValueError as exc:
 
                 await query.message.reply_text(
-                    f"❌ {exc}",
+                    f"❌ {esc(exc)}",
                     reply_markup=main_menu(),
                 )
                 return
@@ -263,20 +264,20 @@ async def button_click(
             elif is_multi_city:
 
                 legs_text = "\n".join(
-                    f"{i}. {leg['origin']} ➜ {leg['destination']} on {leg['date']}"
+                    f"{i}. {esc(leg['origin'])} ➜ {esc(leg['destination'])} on {esc(leg['date'])}"
                     for i, leg in enumerate(flight.legs, start=1)
                 )
 
                 text = (
-                    "✈️ Cheapest Multi-city Itinerary\n\n"
-                    f"🏢 Provider : {result.provider}\n\n"
-                    f"✈ Airline : {result.airline}\n\n"
-                    f"💰 Price : {result.price:.0f} {result.currency}\n\n"
+                    "<b>✈️ Cheapest Multi-city Itinerary</b>\n\n"
+                    f"🏢 Provider : {esc(result.provider)}\n\n"
+                    f"✈ Airline : {esc(result.airline)}\n\n"
+                    f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
                     f"{legs_text}"
                 )
 
                 if result.booking_url:
-                    text += f"\n\n🔗 {result.booking_url}"
+                    text += f'\n\n<a href="{esc(result.booking_url)}">🔗 View Flight</a>'
 
                 await query.message.reply_text(
                     text=text,
@@ -286,26 +287,26 @@ async def button_click(
             else:
 
                 text = (
-                    "✈️ Cheapest Flight\n\n"
-                    f"🏢 Provider : {result.provider}\n\n"
-                    f"✈ Airline : {result.airline}\n\n"
-                    f"💰 Price : {result.price:.0f} {result.currency}\n\n"
-                    f"📍 Route : {result.origin} ➜ {result.destination}\n\n"
-                    f"📅 Departure : {result.departure_date}"
+                    "<b>✈️ Cheapest Flight</b>\n\n"
+                    f"🏢 Provider : {esc(result.provider)}\n\n"
+                    f"✈ Airline : {esc(result.airline)}\n\n"
+                    f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
+                    f"📍 Route : <b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n\n"
+                    f"📅 Departure : {esc(result.departure_date)}"
                 )
 
                 if flight.trip_type == "round-trip":
-                    text += f"\n\n🔁 Return : {result.return_date}"
+                    text += f"\n\n🔁 Return : {esc(result.return_date)}"
 
                 if result.booking_url:
-                    text += f"\n\n🔗 {result.booking_url}"
+                    text += f'\n\n<a href="{esc(result.booking_url)}">🔗 View Flight</a>'
 
                 recommendation = AnalyticsService().recommendation_for_route(
                     result.origin, result.destination, result.price
                 )
 
                 if recommendation:
-                    text += f"\n\n{recommendation}"
+                    text += f"\n\n<b>{recommendation}</b>"
 
                 await query.message.reply_text(
                     text=text,
@@ -352,10 +353,10 @@ async def button_click(
                 spark = ascii_sparkline(prices)
 
                 text = (
-                    f"📉 {flight.origin} ➜ {flight.destination} — last {window_days}d\n\n"
+                    f"📉 <b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b> — last {window_days}d\n\n"
                     f"{spark}\n\n"
                     f"Low {min(prices):.0f} · High {max(prices):.0f} · "
-                    f"Latest {prices[-1]:.0f} SAR"
+                    f"Latest <b>{prices[-1]:.0f} SAR</b>"
                 )
 
                 await query.message.reply_text(text=text)
@@ -420,8 +421,8 @@ async def button_click(
             await query.message.reply_text(
                 text=(
                     "🗑 Delete this flight?\n\n"
-                    f"{flight.origin} ➜ {flight.destination}\n"
-                    f"📅 {flight.departure_date} / 🔁 {flight.return_date}"
+                    f"<b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n"
+                    f"📅 {esc(flight.departure_date)} / 🔁 {esc(flight.return_date)}"
                 ),
                 reply_markup=confirm_keyboard,
             )
