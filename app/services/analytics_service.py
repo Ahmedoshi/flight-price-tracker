@@ -1,3 +1,4 @@
+import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,9 +14,13 @@ class RouteStats:
     min_price: float
     max_price: float
     avg_price: float
+    median_price: float
+    volatility_pct: float  # stdev as a % of the average - how much prices bounce around
     trend: str  # "up" | "down" | "flat"
     trend_pct: float  # % change, second-half avg vs first-half avg (signed)
+    expected_price: float  # recent-regime average (second half of window) - a forward-looking estimate, distinct from avg_price which covers the whole window
     best_booking_day: str | None  # weekday name with the lowest avg price
+    worst_booking_day: str | None  # weekday name with the highest avg price
     best_departure_day: str | None  # weekday name (by departure date)
 
 
@@ -24,17 +29,22 @@ class RouteStats:
 TREND_NOISE_THRESHOLD_PCT = 2.0
 
 
-def _trend_from_prices(prices: list[float]) -> tuple[str, float]:
+def _trend_from_prices(prices: list[float]) -> tuple[str, float, float]:
     """Trend across the whole window, not just the last two checks.
 
     Compares the average of the first half of the (chronologically
     ordered) prices against the average of the second half - more
     resistant to a single noisy reading than a last-two-points
     comparison, while still being simple enough to reason about.
+
+    Also returns the second-half average itself, used as
+    RouteStats.expected_price - a "what to expect right now" estimate
+    that reflects the recent regime rather than the whole window
+    (which may include older, less-relevant prices).
     """
 
     if len(prices) < 2:
-        return "flat", 0.0
+        return "flat", 0.0, prices[0] if prices else 0.0
 
     midpoint = len(prices) // 2
     first_half = prices[:midpoint] or prices[:1]
@@ -44,17 +54,17 @@ def _trend_from_prices(prices: list[float]) -> tuple[str, float]:
     second_avg = sum(second_half) / len(second_half)
 
     if first_avg <= 0:
-        return "flat", 0.0
+        return "flat", 0.0, second_avg
 
     change_pct = (second_avg - first_avg) / first_avg * 100
 
     if change_pct > TREND_NOISE_THRESHOLD_PCT:
-        return "up", change_pct
+        return "up", change_pct, second_avg
 
     if change_pct < -TREND_NOISE_THRESHOLD_PCT:
-        return "down", change_pct
+        return "down", change_pct, second_avg
 
-    return "flat", change_pct
+    return "flat", change_pct, second_avg
 
 
 class AnalyticsService:
@@ -169,8 +179,17 @@ def _compute_stats(rows) -> RouteStats | None:
     minimum = min(prices)
     maximum = max(prices)
     average = sum(prices) / len(prices)
+    median = statistics.median(prices)
 
-    trend, trend_pct = _trend_from_prices(prices)
+    # Volatility as a % of the average, rather than a raw currency
+    # figure - "prices bounce around by about 12%" reads the same
+    # regardless of the route's price level. pstdev (population stdev)
+    # since this is the complete set of observed prices in the window,
+    # not a sample standing in for a larger population.
+    stdev = statistics.pstdev(prices) if len(prices) > 1 else 0.0
+    volatility_pct = (stdev / average * 100) if average > 0 else 0.0
+
+    trend, trend_pct, expected_price = _trend_from_prices(prices)
 
     booking_day_prices = defaultdict(list)
     departure_day_prices = defaultdict(list)
@@ -190,6 +209,7 @@ def _compute_stats(rows) -> RouteStats | None:
             pass
 
     best_booking_day = _cheapest_day(booking_day_prices)
+    worst_booking_day = _priciest_day(booking_day_prices)
     best_departure_day = _cheapest_day(departure_day_prices)
 
     return RouteStats(
@@ -197,9 +217,13 @@ def _compute_stats(rows) -> RouteStats | None:
         min_price=minimum,
         max_price=maximum,
         avg_price=average,
+        median_price=median,
+        volatility_pct=volatility_pct,
         trend=trend,
         trend_pct=trend_pct,
+        expected_price=expected_price,
         best_booking_day=best_booking_day,
+        worst_booking_day=worst_booking_day,
         best_departure_day=best_departure_day,
     )
 
@@ -210,6 +234,14 @@ def _cheapest_day(day_prices: dict) -> str | None:
         return None
 
     return min(day_prices, key=lambda day: sum(day_prices[day]) / len(day_prices[day]))
+
+
+def _priciest_day(day_prices: dict) -> str | None:
+
+    if not day_prices:
+        return None
+
+    return max(day_prices, key=lambda day: sum(day_prices[day]) / len(day_prices[day]))
 
 
 def _parse_timestamp(value: str) -> datetime | None:

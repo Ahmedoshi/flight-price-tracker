@@ -284,8 +284,12 @@ def analytics_screen():
             f"📉 Min : {stats.min_price:.0f} SAR\n"
             f"📈 Max : {stats.max_price:.0f} SAR\n"
             f"📊 Avg : {stats.avg_price:.0f} SAR\n"
-            f"{trend_emoji} Trend : {stats.trend}{trend_detail}\n\n"
+            f"🎯 Median : {stats.median_price:.0f} SAR\n"
+            f"📶 Volatility : {stats.volatility_pct:.0f}%\n"
+            f"{trend_emoji} Trend : {stats.trend}{trend_detail}\n"
+            f"🔮 Expected now : {stats.expected_price:.0f} SAR\n\n"
             f"🗓 Best day to book : {stats.best_booking_day or '—'}\n"
+            f"😖 Worst day to book : {stats.worst_booking_day or '—'}\n"
             f"🛫 Best departure day : {stats.best_departure_day or '—'}\n\n"
             f"🔢 Based on {stats.count} check(s)"
         )
