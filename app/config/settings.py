@@ -12,6 +12,15 @@ class Settings(BaseSettings):
 
     database_path: str = "data/flights.db"
 
+    # Postgres connection string (Roadmap Phase 5). When set (Railway
+    # injects this automatically once a Postgres plugin is attached to
+    # the project), app/database/database.py uses Postgres instead of
+    # the local SQLite file - the two backends share the exact same
+    # public function signatures, so nothing above the database layer
+    # needs to know which one is active. Leave unset for local/dev use
+    # (falls back to SQLite at database_path).
+    database_url: str = ""
+
     kiwi_api_key: str = ""
 
     # Extra providers - optional, no-op until keys are supplied.

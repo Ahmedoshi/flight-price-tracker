@@ -2,77 +2,195 @@ import json
 import sqlite3
 from pathlib import Path
 
+from app.config.settings import settings
 from app.models.flight import Flight
 
 DB_PATH = Path("data/flights.db")
 
+# Roadmap Phase 5: Postgres support. When DATABASE_URL is set (Railway
+# injects this automatically once a Postgres plugin is attached to the
+# project), every function below talks to Postgres via psycopg2
+# instead of the local SQLite file. Every query in this module is
+# written with "?" placeholders; _ConnWrapper translates them to "%s"
+# for psycopg2, so the two backends share identical calling code.
+# Leave DATABASE_URL unset for local/dev/test use (falls back to
+# SQLite at DB_PATH).
+USE_POSTGRES = bool(settings.database_url)
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extensions
+
+    # Postgres returns Decimal for REAL/NUMERIC columns by default;
+    # every caller in this codebase expects plain floats (same as
+    # sqlite3 returns), so register a cast that decodes those columns
+    # straight to float.
+    DEC2FLOAT = psycopg2.extensions.new_type(
+        psycopg2.extensions.DECIMAL.values,
+        "DEC2FLOAT",
+        lambda value, curs: float(value) if value is not None else None,
+    )
+    psycopg2.extensions.register_type(DEC2FLOAT)
+
+
+class _ConnWrapper:
+    """Lets the rest of this module write conn.execute(query, params)
+    with '?' placeholders and call .fetchone()/.fetchall() on the
+    result, regardless of whether the backend is SQLite (sqlite3's
+    Connection.execute is already this shape) or Postgres (psycopg2
+    needs an explicit cursor and '%s' placeholders).
+    """
+
+    def __init__(self, raw_conn, is_pg: bool):
+        self._conn = raw_conn
+        self._is_pg = is_pg
+
+    def execute(self, query: str, params=()):
+
+        if self._is_pg:
+            query = query.replace("?", "%s")
+
+        cur = self._conn.cursor()
+        cur.execute(query, params)
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
 
 def get_connection():
 
+    if USE_POSTGRES:
+        conn = psycopg2.connect(settings.database_url)
+        return _ConnWrapper(conn, is_pg=True)
+
     DB_PATH.parent.mkdir(exist_ok=True)
 
-    return sqlite3.connect(DB_PATH)
+    return _ConnWrapper(sqlite3.connect(DB_PATH), is_pg=False)
 
 
 def initialize_database():
 
     conn = get_connection()
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS flights (
+    if USE_POSTGRES:
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS flights (
 
-            origin TEXT NOT NULL,
-            destination TEXT NOT NULL,
+                id SERIAL PRIMARY KEY,
 
-            departure_date TEXT NOT NULL,
-            return_date TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                destination TEXT NOT NULL,
 
-            max_price REAL NOT NULL
+                departure_date TEXT NOT NULL,
+                return_date TEXT NOT NULL,
+
+                max_price REAL NOT NULL
+            )
+            """
         )
-        """
-    )
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS price_history (
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS price_history (
 
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
 
-            origin TEXT NOT NULL,
-            destination TEXT NOT NULL,
+                origin TEXT NOT NULL,
+                destination TEXT NOT NULL,
 
-            departure_date TEXT NOT NULL,
-            return_date TEXT NOT NULL,
+                departure_date TEXT NOT NULL,
+                return_date TEXT NOT NULL,
 
-            airline TEXT NOT NULL,
+                airline TEXT NOT NULL,
 
-            price REAL NOT NULL,
+                price REAL NOT NULL,
 
-            checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
         )
-        """
-    )
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS provider_health (
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS provider_health (
 
-            provider TEXT PRIMARY KEY,
+                provider TEXT PRIMARY KEY,
 
-            total_checks INTEGER NOT NULL DEFAULT 0,
-            success_count INTEGER NOT NULL DEFAULT 0,
-            success_response_ms REAL NOT NULL DEFAULT 0,
+                total_checks INTEGER NOT NULL DEFAULT 0,
+                success_count INTEGER NOT NULL DEFAULT 0,
+                success_response_ms REAL NOT NULL DEFAULT 0,
 
-            consecutive_failures INTEGER NOT NULL DEFAULT 0,
-            disabled_until TEXT,
-            last_error TEXT,
-            last_checked_at TEXT
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                disabled_until TEXT,
+                last_error TEXT,
+                last_checked_at TEXT
+            )
+            """
         )
-        """
-    )
+
+    else:
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS flights (
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                origin TEXT NOT NULL,
+                destination TEXT NOT NULL,
+
+                departure_date TEXT NOT NULL,
+                return_date TEXT NOT NULL,
+
+                max_price REAL NOT NULL
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS price_history (
+
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                origin TEXT NOT NULL,
+                destination TEXT NOT NULL,
+
+                departure_date TEXT NOT NULL,
+                return_date TEXT NOT NULL,
+
+                airline TEXT NOT NULL,
+
+                price REAL NOT NULL,
+
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS provider_health (
+
+                provider TEXT PRIMARY KEY,
+
+                total_checks INTEGER NOT NULL DEFAULT 0,
+                success_count INTEGER NOT NULL DEFAULT 0,
+                success_response_ms REAL NOT NULL DEFAULT 0,
+
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                disabled_until TEXT,
+                last_error TEXT,
+                last_checked_at TEXT
+            )
+            """
+        )
 
     _ensure_column(conn, "flights", "date_flex_days", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "flights", "trip_type", "TEXT NOT NULL DEFAULT 'round-trip'")
@@ -96,10 +214,19 @@ def _ensure_column(conn, table: str, column: str, definition: str):
     up new columns without a separate migration step.
     """
 
-    existing = {
-        row[1]
-        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
-    }
+    if USE_POSTGRES:
+        existing = {
+            row[0]
+            for row in conn.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = ?",
+                (table,),
+            ).fetchall()
+        }
+    else:
+        existing = {
+            row[1]
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
 
     if column not in existing:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
@@ -358,8 +485,12 @@ def get_route_price_history(
     params = [*origins, *destinations]
 
     if since_days is not None:
-        query += " AND checked_at >= datetime('now', ?)"
-        params.append(f"-{since_days} days")
+        if USE_POSTGRES:
+            query += " AND checked_at >= NOW() - (? || ' days')::interval"
+            params.append(str(since_days))
+        else:
+            query += " AND checked_at >= datetime('now', ?)"
+            params.append(f"-{since_days} days")
 
     query += " ORDER BY checked_at"
 
