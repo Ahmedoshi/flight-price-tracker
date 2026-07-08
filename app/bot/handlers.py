@@ -8,6 +8,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
 from app.scheduler.scheduler import hourly_check
+from app.utils.airport_flags import airport_flag
 from app.utils.airports import parse_codes, validate_codes
 from app.utils.dates import format_checked_at, is_valid_date
 from app.utils.flight_filters import format_filters, parse_trailing_tokens
@@ -145,7 +146,8 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏢 Provider : {esc(result.provider)}\n\n"
         f"✈ Airline : {esc(result.airline)}\n\n"
         f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
-        f"📍 Route : <b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n\n"
+        f"📍 Route : <b>{airport_flag(result.origin)} {esc(result.origin)} ➜ "
+        f"{airport_flag(result.destination)} {esc(result.destination)}</b>\n\n"
         f"📅 Departure : {esc(result.departure_date)}"
     )
 
@@ -320,7 +322,8 @@ async def list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         filters_line = f"🎛 <i>{esc(filters_text)}</i>\n" if filters_text else ""
 
         text += (
-            f"{i}. <b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n"
+            f"{i}. <b>{airport_flag(flight.origin)} {esc(flight.origin)} ➜ "
+            f"{airport_flag(flight.destination)} {esc(flight.destination)}</b>\n"
             f"📅 {esc(flight.departure_date)}\n"
             f"{return_line}"
             f"{filters_line}"

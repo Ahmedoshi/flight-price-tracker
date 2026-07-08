@@ -12,6 +12,7 @@ from app.bot.keyboards import filters_keyboard, main_menu
 from app.services.analytics_service import AnalyticsService
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
+from app.utils.airport_flags import airport_flag
 from app.utils.airports import parse_codes, validate_codes
 from app.utils.dates import is_valid_date
 from app.utils.flight_filters import DEFAULT_FILTERS, format_filters
@@ -832,7 +833,8 @@ async def check_flex(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏢 Provider : {esc(result.provider)}\n\n"
         f"✈ Airline : {esc(result.airline)}\n\n"
         f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
-        f"📍 Route : <b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n\n"
+        f"📍 Route : <b>{airport_flag(result.origin)} {esc(result.origin)} ➜ "
+        f"{airport_flag(result.destination)} {esc(result.destination)}</b>\n\n"
         f"📅 Departure : {esc(result.departure_date)}"
     )
 

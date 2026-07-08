@@ -46,6 +46,46 @@ def ascii_sparkline(prices: list[float]) -> str:
     return "".join(bars)
 
 
+def volatility_gauge(volatility_pct: float, blocks: int = 8, full_at_pct: float = 50.0) -> str:
+    """A filled/empty block gauge like '🟩🟩🟩⬜⬜⬜⬜⬜' - a quick visual
+    read on how much a route's price bounces around, without making
+    someone parse a percentage number.
+
+    full_at_pct is the volatility% treated as "fully filled" - flight
+    prices rarely swing more than ~50% within a tracking window, so
+    that's the reference point the bar is scaled against (capped at
+    the full bar rather than overflowing past it).
+    """
+
+    if full_at_pct <= 0:
+        return "⬜" * blocks
+
+    filled = round(volatility_pct / full_at_pct * blocks)
+    filled = max(0, min(blocks, filled))
+
+    return "🟩" * filled + "⬜" * (blocks - filled)
+
+
+def price_range_bar(current: float, low: float, high: float, width: int = 12) -> str:
+    """A monospace-friendly inline gauge showing where `current` sits
+    between `low` and `high`, e.g. '1900 ────●────── 2600' - Telegram
+    only renders this aligned if wrapped in <code>...</code> (regular
+    message text uses a proportional font, so plain spaces/dashes
+    won't line up).
+    """
+
+    if high <= low:
+        return f"{low:.0f}"
+
+    ratio = max(0.0, min(1.0, (current - low) / (high - low)))
+    position = round(ratio * (width - 1))
+
+    bar = ["─"] * width
+    bar[position] = "●"
+
+    return f"{low:.0f} {''.join(bar)} {high:.0f}"
+
+
 def render_price_chart_png(
     prices: list[float],
     labels: list[str],

@@ -9,8 +9,9 @@ from app.config.settings import settings
 from app.scheduler.scheduler import get_status
 from app.services import provider_health
 from app.services.analytics_service import AnalyticsService, TREND_EMOJI
-from app.services.chart_service import ascii_sparkline
+from app.services.chart_service import ascii_sparkline, price_range_bar, volatility_gauge
 from app.services.tracking_service import TrackingService
+from app.utils.airport_flags import airport_flag
 from app.utils.dates import format_checked_at
 from app.utils.text import esc
 
@@ -162,7 +163,8 @@ def flights_screen():
         if flight.trip_type == "multi-city" and flight.legs:
 
             legs_text = "\n".join(
-                f"  {i}. {esc(leg['origin'])} ➜ {esc(leg['destination'])} ({esc(leg['date'])})"
+                f"  {i}. {airport_flag(leg['origin'])} {esc(leg['origin'])} ➜ "
+                f"{airport_flag(leg['destination'])} {esc(leg['destination'])} ({esc(leg['date'])})"
                 for i, leg in enumerate(flight.legs, start=1)
             )
 
@@ -194,7 +196,8 @@ def flights_screen():
         text = (
             f"<b>✈️ Flight #{position}</b>\n\n"
             f"{DIVIDER}\n\n"
-            f"<b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n\n"
+            f"<b>{airport_flag(flight.origin)} {esc(flight.origin)} ➜ "
+            f"{airport_flag(flight.destination)} {esc(flight.destination)}</b>\n\n"
             f"📅 Departure : {esc(flight.departure_date)}\n"
             f"{return_line}"
             f"🎯 Target : <b>{flight.max_price:.0f} SAR</b>"
@@ -289,19 +292,22 @@ def analytics_screen():
         prices = [row[0] for row in rows]
         spark = ascii_sparkline(prices)
         spark_line = f"{spark}\n\n" if spark else ""
+        range_bar = price_range_bar(stats.expected_price, stats.min_price, stats.max_price)
 
         text = (
             f"<b>📊 Flight #{position}</b> — <i>last {window_days}d</i>\n\n"
             f"{DIVIDER}\n\n"
-            f"<b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n\n"
+            f"<b>{airport_flag(flight.origin)} {esc(flight.origin)} ➜ "
+            f"{airport_flag(flight.destination)} {esc(flight.destination)}</b>\n\n"
             f"{spark_line}"
             f"📉 Min : {stats.min_price:.0f} SAR\n"
             f"📈 Max : {stats.max_price:.0f} SAR\n"
             f"📊 Avg : {stats.avg_price:.0f} SAR\n"
             f"🎯 Median : {stats.median_price:.0f} SAR\n"
-            f"📶 Volatility : {stats.volatility_pct:.0f}%\n"
+            f"📶 Volatility : {stats.volatility_pct:.0f}% {volatility_gauge(stats.volatility_pct)}\n"
             f"{trend_emoji} Trend : {stats.trend}{trend_detail}\n"
-            f"🔮 Expected now : <b>{stats.expected_price:.0f} SAR</b>\n\n"
+            f"🔮 Expected now : <b>{stats.expected_price:.0f} SAR</b>\n"
+            f"<code>{esc(range_bar)}</code>\n\n"
             f"🗓 Best day to book : {esc(stats.best_booking_day) if stats.best_booking_day else '—'}\n"
             f"😖 Worst day to book : {esc(stats.worst_booking_day) if stats.worst_booking_day else '—'}\n"
             f"🛫 Best departure day : {esc(stats.best_departure_day) if stats.best_departure_day else '—'}\n\n"
@@ -313,7 +319,7 @@ def analytics_screen():
             recommendation = analytics.recommendation(
                 flight.last_price, stats, window_days
             )
-            text += f"\n\n<b>{recommendation}</b>"
+            text += f"\n\n<blockquote>{recommendation}</blockquote>"
 
         cards.append((text, main_menu()))
 

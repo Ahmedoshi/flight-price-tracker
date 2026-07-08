@@ -10,6 +10,7 @@ from app.services.flight_service import FlightService
 from app.services.notification_rules import evaluate_alert
 from app.services.tracking_service import TrackingService
 from app.services.whatsapp_service import send_whatsapp
+from app.utils.airport_flags import airport_flag
 from app.utils.text import esc
 
 
@@ -117,7 +118,8 @@ async def hourly_check(application):
         # Telegram string.
         telegram_text = (
             f"<b>{header}</b>\n\n"
-            f"<b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n"
+            f"<b>{airport_flag(result.origin)} {esc(result.origin)} ➜ "
+            f"{airport_flag(result.destination)} {esc(result.destination)}</b>\n"
             f"📅 {esc(result.departure_date)} / 🔁 {esc(result.return_date)}\n"
             f"🏢 {esc(result.provider)}\n"
             f"Airline: {esc(result.airline)}\n"
@@ -142,7 +144,7 @@ async def hourly_check(application):
             whatsapp_text += f"\n🔗 {result.booking_url}"
 
         if recommendation:
-            telegram_text += f"\n\n<b>{recommendation}</b>"
+            telegram_text += f"\n\n<blockquote>{recommendation}</blockquote>"
             whatsapp_text += f"\n\n{recommendation}"
 
         await application.bot.send_message(

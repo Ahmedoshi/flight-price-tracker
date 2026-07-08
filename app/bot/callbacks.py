@@ -28,6 +28,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.chart_service import ascii_sparkline, render_price_chart_png
 from app.services.flight_service import FlightService
 from app.services.tracking_service import TrackingService
+from app.utils.airport_flags import airport_flag
 from app.utils.dates import format_checked_at
 from app.utils.text import esc
 
@@ -292,7 +293,8 @@ async def button_click(
                     f"🏢 Provider : {esc(result.provider)}\n\n"
                     f"✈ Airline : {esc(result.airline)}\n\n"
                     f"💰 Price : <b>{result.price:.0f} {esc(result.currency)}</b>\n\n"
-                    f"📍 Route : <b>{esc(result.origin)} ➜ {esc(result.destination)}</b>\n\n"
+                    f"📍 Route : <b>{airport_flag(result.origin)} {esc(result.origin)} ➜ "
+                    f"{airport_flag(result.destination)} {esc(result.destination)}</b>\n\n"
                     f"📅 Departure : {esc(result.departure_date)}"
                 )
 
@@ -354,7 +356,8 @@ async def button_click(
                 spark = ascii_sparkline(prices)
 
                 text = (
-                    f"📉 <b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b> — last {window_days}d\n\n"
+                    f"📉 <b>{airport_flag(flight.origin)} {esc(flight.origin)} ➜ "
+                    f"{airport_flag(flight.destination)} {esc(flight.destination)}</b> — last {window_days}d\n\n"
                     f"{spark}\n\n"
                     f"Low {min(prices):.0f} · High {max(prices):.0f} · "
                     f"Latest <b>{prices[-1]:.0f} SAR</b>"
@@ -422,7 +425,8 @@ async def button_click(
             await query.message.reply_text(
                 text=(
                     "🗑 Delete this flight?\n\n"
-                    f"<b>{esc(flight.origin)} ➜ {esc(flight.destination)}</b>\n"
+                    f"<b>{airport_flag(flight.origin)} {esc(flight.origin)} ➜ "
+                    f"{airport_flag(flight.destination)} {esc(flight.destination)}</b>\n"
                     f"📅 {esc(flight.departure_date)} / 🔁 {esc(flight.return_date)}"
                 ),
                 reply_markup=confirm_keyboard,
