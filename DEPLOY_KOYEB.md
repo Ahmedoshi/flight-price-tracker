@@ -1,5 +1,11 @@
 # Moving off Railway: Koyeb (free) + Neon (free Postgres)
 
+> **Deprecated (July 2026):** Koyeb closed its free Starter tier to
+> new signups after the Mistral AI acquisition - new accounts now
+> start at $29/month, which defeats the point of this doc. Left here
+> for reference only. See [DEPLOY_FLY.md](./DEPLOY_FLY.md) for the
+> path actually used instead.
+
 Railway started charging (~$5/mo). This is a $0 alternative, with one
 tradeoff spelled out below.
 

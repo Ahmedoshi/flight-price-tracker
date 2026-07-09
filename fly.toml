@@ -1,0 +1,23 @@
+# Fly.io deploy config. Unlike Koyeb, Fly Machines don't require an
+# HTTP service to stay alive - a Machine with no [http_service] block
+# just runs continuously, which fits this bot (Telegram long-polling +
+# an internal APScheduler job, no HTTP API of its own). No keepalive
+# pinger needed here, unlike the Koyeb path this repo briefly explored.
+#
+# `app` gets overwritten by `fly launch`/`fly apps create` with
+# whatever name you actually register - this is just a placeholder.
+app = "flight-price-tracker"
+primary_region = "iad"
+
+[build]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# The Google Flights provider drives headless Chromium via Playwright
+# (see app/providers/google_flights.py) - it's the heaviest thing this
+# process does memory-wise. If you see OOM restarts in `fly logs`,
+# either bump memory above (e.g. "1gb") or disable the Google Flights
+# provider and rely on the API-based providers (Kiwi/Amadeus/Duffel/
+# Skyscanner) instead.

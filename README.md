@@ -29,9 +29,11 @@ calls - these are intentionally kept out of `tests/` so pytest never
 executes them by accident. Run them directly when needed:
 `python3 scripts/debug_fast_flights.py`.
 
-## Deploying for free (Koyeb + Neon)
+## Deploying off Railway (Fly.io + Neon)
 
-See [DEPLOY_KOYEB.md](./DEPLOY_KOYEB.md) for moving hosting off
-Railway's paid plan onto Koyeb's free tier + Neon's free Postgres,
-including the data migration script and the keepalive setup a
-background-polling bot needs on a free Web Service tier.
+See [DEPLOY_FLY.md](./DEPLOY_FLY.md) for moving hosting off Railway's
+paid plan onto Fly.io (usage-based, typically well under Railway's
+$5/month for a bot this size) + Neon's free Postgres, including the
+data migration script. (An earlier attempt to use Koyeb's free tier
+and Oracle Cloud's Always Free VM is documented in DEPLOY_KOYEB.md for
+reference, but hit dead ends - see that file for why.)
