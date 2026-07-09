@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+data/
+logs/
+saas_migration_plan.md
+DEPLOY_KOYEB.md
+README.md

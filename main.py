@@ -1,3 +1,7 @@
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from loguru import logger
 from telegram import BotCommand, Update
 from telegram.constants import ParseMode
@@ -89,9 +93,44 @@ async def post_init(application: Application):
     start_scheduler(application)
 
 
+class _HealthHandler(BaseHTTPRequestHandler):
+    """Responds 200 OK to any GET - Koyeb's free tier only supports
+    Web Services (not Worker Services), so this bot - which is really
+    a background Telegram-polling process with no HTTP API of its own
+    - needs *something* listening on $PORT for Koyeb's health check to
+    pass. An external pinger (e.g. cron-job.org) hits this on a
+    schedule too, which keeps the free instance from scaling to zero
+    after an hour of no traffic.
+    """
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, format, *args):
+        # Quiet - this gets hit every few minutes by health checks and
+        # the keepalive pinger, and would otherwise spam the real logs.
+        pass
+
+
+def _start_health_server():
+
+    port = int(os.environ.get("PORT", "8000"))
+    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    server.serve_forever()
+
+
 def main():
 
     initialize_database()
+
+    # Runs in a daemon thread so it never blocks/delays shutdown of
+    # the main process - it's purely there to satisfy Koyeb's Web
+    # Service health check and keepalive pings. No-op on platforms
+    # (like Railway) that don't need it.
+    threading.Thread(target=_start_health_server, daemon=True).start()
 
     print("===================================")
     print(" Flight Price Tracker")

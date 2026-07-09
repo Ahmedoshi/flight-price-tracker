@@ -28,3 +28,10 @@ temporary SQLite database (see `tests/conftest.py`) and never touches
 calls - these are intentionally kept out of `tests/` so pytest never
 executes them by accident. Run them directly when needed:
 `python3 scripts/debug_fast_flights.py`.
+
+## Deploying for free (Koyeb + Neon)
+
+See [DEPLOY_KOYEB.md](./DEPLOY_KOYEB.md) for moving hosting off
+Railway's paid plan onto Koyeb's free tier + Neon's free Postgres,
+including the data migration script and the keepalive setup a
+background-polling bot needs on a free Web Service tier.
