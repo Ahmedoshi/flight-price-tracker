@@ -13,6 +13,15 @@
 
 FROM python:3.11-slim
 
+# Without this, Python block-buffers stdout when it isn't attached to
+# a TTY (i.e. always, inside a container) - print() output (including
+# main.py's startup banner and any scheduler activity) can sit in the
+# buffer indefinitely instead of reaching `railway logs`/`fly logs`,
+# making a perfectly healthy process look hung. Nixpacks-based builds
+# (Railway's old auto-detected build, before this Dockerfile existed)
+# set this automatically; a custom Dockerfile doesn't unless told to.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 # Playwright's Chromium needs these system libraries to run headless
@@ -30,11 +39,13 @@ RUN playwright install chromium
 
 COPY . .
 
-# Railway's persistent Volume at /app/data doesn't exist here - Koyeb
-# free tier has no volumes, so this directory is ephemeral (fine once
-# DATABASE_URL points at Neon, since flight/price data lives there,
-# not in local SQLite; only logs and bot_persistence.pickle are lost
-# on redeploy).
+# This directory exists at build time regardless of platform. Railway
+# overlays its own persistent Volume here at runtime (already
+# configured from the original Nixpacks-based deploy); on platforms
+# without a mounted volume (Koyeb free tier, a bare Fly Machine) this
+# is ephemeral instead - fine once DATABASE_URL points at Postgres,
+# since flight/price data lives there, not in local SQLite; only logs
+# and bot_persistence.pickle would be lost on redeploy in that case.
 RUN mkdir -p /app/data /app/logs
 
 CMD ["python", "main.py"]

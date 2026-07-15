@@ -29,6 +29,7 @@ from app.config.settings import settings
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
 from app.providers.base_provider import BaseProvider
+from app.providers.google_url import GoogleFlightsURLBuilder
 from app.services.fx_service import convert_to_sar
 
 OFFER_REQUESTS_URL = "https://api.duffel.com/air/offer_requests"
@@ -128,7 +129,18 @@ class DuffelFlightsProvider(BaseProvider):
                     destination=flight.destination,
                     departure_date=flight.departure_date,
                     return_date=flight.return_date,
-                    booking_url="",
+                    # Duffel is a B2B API with no consumer-facing page for
+                    # a specific offer (booking requires their order-
+                    # creation API, not a URL) - link to a Google Flights
+                    # search for the same route/dates instead, so the
+                    # alert always has something clickable even though it
+                    # won't show this exact fare.
+                    booking_url=GoogleFlightsURLBuilder.build(
+                        flight.origin,
+                        flight.destination,
+                        flight.departure_date,
+                        flight.return_date,
+                    ),
                 )
             )
 

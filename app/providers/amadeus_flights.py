@@ -33,6 +33,7 @@ from app.config.settings import settings
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
 from app.providers.base_provider import BaseProvider
+from app.providers.google_url import GoogleFlightsURLBuilder
 
 TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
 SEARCH_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
@@ -121,7 +122,15 @@ class AmadeusFlightsProvider(BaseProvider):
                     destination=flight.destination,
                     departure_date=flight.departure_date,
                     return_date=flight.return_date,
-                    booking_url="",
+                    # Amadeus's Self-Service API has no consumer booking
+                    # page for a specific offer either - same Google
+                    # Flights search fallback as the Duffel provider.
+                    booking_url=GoogleFlightsURLBuilder.build(
+                        flight.origin,
+                        flight.destination,
+                        flight.departure_date,
+                        flight.return_date,
+                    ),
                 )
             )
 

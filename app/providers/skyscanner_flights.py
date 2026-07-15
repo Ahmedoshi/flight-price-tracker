@@ -45,6 +45,7 @@ from app.config.settings import settings
 from app.models.flight import Flight
 from app.models.flight_result import FlightResult
 from app.providers.base_provider import BaseProvider
+from app.providers.google_url import GoogleFlightsURLBuilder
 
 API_HOST = "sky-scrapper.p.rapidapi.com"
 BASE_URL = f"https://{API_HOST}/api"
@@ -216,7 +217,16 @@ class SkyscannerFlightsProvider(BaseProvider):
                 destination=flight.destination,
                 departure_date=flight.departure_date,
                 return_date=flight.return_date,
-                booking_url="",
+                # Skyscanner's real API does return a deeplink per
+                # itinerary, but this docs-only implementation doesn't
+                # parse one yet - same Google Flights search fallback
+                # as Duffel/Amadeus in the meantime.
+                booking_url=GoogleFlightsURLBuilder.build(
+                    flight.origin,
+                    flight.destination,
+                    flight.departure_date,
+                    flight.return_date,
+                ),
                 stops=stops,
             )
 
