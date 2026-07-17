@@ -86,6 +86,7 @@ async def post_init(application: Application):
             BotCommand("delete", "Delete Flight"),
             BotCommand("history", "Price History"),
             BotCommand("stats", "Price Analytics"),
+            BotCommand("check_now", "Check All Saved Flights Now"),
             BotCommand("run_scheduler", "Run Scheduler"),
         ]
     )

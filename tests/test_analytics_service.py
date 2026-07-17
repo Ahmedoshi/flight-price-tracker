@@ -6,7 +6,17 @@ from app.models.flight import Flight
 from app.services.analytics_service import AnalyticsService, _compute_stats, _parse_timestamp
 
 
-def _seed_price_history(dbmod, prices, start=datetime.datetime(2026, 6, 1)):
+def _seed_price_history(dbmod, prices, start=None):
+    """Seeds price_history starting `start` (default: 40 days before
+    "now", computed at call time rather than a hardcoded calendar
+    date). Tests query with since_days=45, so a fixed calendar date
+    (e.g. 2026-06-01) works today but silently falls out of that
+    window as real time marches past it - this rots the test instead
+    of catching real regressions. Computing relative to "now" keeps
+    the test valid indefinitely."""
+
+    if start is None:
+        start = datetime.datetime.now() - datetime.timedelta(days=40)
 
     conn = dbmod.get_connection()
 
@@ -94,14 +104,22 @@ def test_expected_price_reflects_recent_half_not_whole_window(temp_db):
 
 def test_best_and_worst_booking_day_differ(temp_db):
 
-    # Mondays cheap, Fridays expensive - 2026-06-01 is a Monday.
+    # Mondays cheap, Fridays expensive - anchored to a Monday safely
+    # in the past (relative to "now") rather than a hardcoded calendar
+    # date, so this doesn't fall outside the since_days=45 window as
+    # real time passes.
     conn = temp_db.get_connection()
 
+    this_monday = datetime.datetime.now() - datetime.timedelta(
+        days=datetime.datetime.now().weekday()
+    )
+    base_monday = this_monday - datetime.timedelta(days=14)
+
     rows = [
-        ("2026-06-01 10:00:00", 1000),  # Monday
-        ("2026-06-08 10:00:00", 1000),  # Monday
-        ("2026-06-05 10:00:00", 3000),  # Friday
-        ("2026-06-12 10:00:00", 3000),  # Friday
+        ((base_monday).strftime("%Y-%m-%d") + " 10:00:00", 1000),  # Monday
+        ((base_monday + datetime.timedelta(days=7)).strftime("%Y-%m-%d") + " 10:00:00", 1000),  # Monday
+        ((base_monday + datetime.timedelta(days=4)).strftime("%Y-%m-%d") + " 10:00:00", 3000),  # Friday
+        ((base_monday + datetime.timedelta(days=11)).strftime("%Y-%m-%d") + " 10:00:00", 3000),  # Friday
     ]
 
     for checked_at, price in rows:

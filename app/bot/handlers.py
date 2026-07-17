@@ -171,9 +171,22 @@ async def check(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def check_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Immediately run a price check on every saved/tracked flight -
+    exactly what the command's name implies. This used to just tell
+    the user to press the menu's Check Flight button instead, which
+    opens the ad-hoc single-search wizard (search one new route) - the
+    wrong feature for someone who typed /check_now expecting their
+    existing tracked flights to be checked right now. run_scheduler
+    already does this same hourly_check() call; check_now is kept as
+    a more discoverable/intuitive alias for the same action.
+    """
+
+    await update.message.reply_text("⏳ Checking all saved flights now...")
+
+    await hourly_check(context.application)
 
     await update.message.reply_text(
-        text="Press 🔍 Check Flight from the menu.",
+        "✅ Check complete.",
         reply_markup=main_menu(),
     )
 

@@ -33,11 +33,18 @@ async def hourly_check(application):
     for flight in flights:
 
         # Look up history BEFORE this check's price is searched/saved,
-        # so the "lowest this month" and "rebound" rules compare
-        # against the prior baseline rather than including the very
-        # price they're about to evaluate.
+        # so the "lowest this month", "rebound", and "flash deal" rules
+        # all compare against the prior baseline rather than including
+        # the very price they're about to evaluate. (route_avg_price
+        # used to be computed after the search/save below, which meant
+        # the flash-deal check was comparing today's price against an
+        # average that already included today's price - self-diluting,
+        # especially on routes with only a few historical checks.)
         monthly_stats = analytics.compute_stats(flight, since_days=30)
         monthly_low_price = monthly_stats.min_price if monthly_stats is not None else None
+
+        window_stats = analytics.compute_stats(flight, since_days=settings.analytics_window_days)
+        route_avg_price = window_stats.avg_price if window_stats is not None else None
 
         recent_prices = tracking.recent_prices(flight, limit=2)
         price_before_last = recent_prices[1] if len(recent_prices) > 1 else None
@@ -71,9 +78,6 @@ async def hourly_check(application):
 
         if result is None:
             continue
-
-        stats = analytics.compute_stats(flight, since_days=settings.analytics_window_days)
-        route_avg_price = stats.avg_price if stats is not None else None
 
         decision = evaluate_alert(
             flight,
@@ -109,7 +113,11 @@ async def hourly_check(application):
         else:
             header = "🔥 Price Alert"
 
-        recommendation = analytics.recommendation(result.price, stats) if stats is not None else None
+        recommendation = (
+            analytics.recommendation(result.price, window_stats)
+            if window_stats is not None
+            else None
+        )
 
         # Telegram gets HTML formatting (bold header/price); WhatsApp
         # (via Twilio) has no idea what an HTML tag is and would show

@@ -115,7 +115,23 @@ class DuffelFlightsProvider(BaseProvider):
             # provider here) - convert to SAR so it's comparable against
             # the user's SAR-denominated target price. See fx_service.py.
             if currency.upper() != "SAR":
+
                 price, currency = await convert_to_sar(price, currency)
+
+                if currency.upper() != "SAR":
+                    # convert_to_sar() falls back to the unconverted
+                    # amount/currency if the free FX API is down, rather
+                    # than raising - correct for it not to crash, but
+                    # everything downstream (target-price comparison,
+                    # cheapest-across-providers sort, alert rules) treats
+                    # FlightResult.price as a bare SAR number with no
+                    # currency check. Silently mixing in a EUR price here
+                    # could make a Duffel offer look far cheaper (or more
+                    # expensive) than it really is against SAR targets and
+                    # other providers' results. Drop the offer instead of
+                    # risking a wrong "cheapest"/alert decision - it'll
+                    # naturally retry on the next scheduled check.
+                    continue
 
             airline = (offer.get("owner") or {}).get("name", "Unknown")
 
